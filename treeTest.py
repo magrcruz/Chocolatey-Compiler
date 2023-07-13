@@ -302,6 +302,29 @@ class TestTree():
         root = self.parser.ReturnExpr()
         render_tree(root)
 
+    def notExpr(self):
+        self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ ID EQ STRING NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.notExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID NOT ID MUL INTEGER ADD ID EQ INTEGER ADD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.notExpr()
+        render_tree(root)
+
+    def notExprPrime(self):
+        self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ ID EQ STRING NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.notExprPrime()
+        render_tree(root)
+        print("Should give error")
+
+        self.parser.TOKEN_INPUT = "NOT ID MUL INTEGER ADD ID EQ INTEGER ADD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.notExprPrime()
+        render_tree(root)
+
     def CompExpr(self):
         self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ ID EQ STRING NEWLINE".split()
         self.parser.getToken()
@@ -317,6 +340,17 @@ class TestTree():
         self.parser.getToken()
         root = self.parser.CompExpr()
         render_tree(root)
+        '''EXPECTED
+        EQ
+        ├── ADD
+        │   ├── MUL
+        │   │   ├── ID
+        │   │   └── INTEGER
+        │   └── ID
+        └── ADD
+            ├── INTEGER
+            └── ID
+        '''
 
     def CompExprPrime(self):
         self.parser.TOKEN_INPUT = "EQ ID EQ INTEGER EQ STRING NEWLINE".split()
@@ -627,4 +661,4 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.CompExpr()
+testTree.notExpr()

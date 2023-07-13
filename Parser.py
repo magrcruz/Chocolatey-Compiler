@@ -648,21 +648,42 @@ class Parser:
 
     def notExpr(self): # COMPLETADO
         # notExpr ::= CompExpr notExprPrime
-        self.CompExpr()
-        self.notExprPrime()
+        nodo = None
+        child = self.CompExpr()
+        parent = self.notExprPrime()
+        if parent != None:
+            sibling = goDownLeft(parent)
+            if sibling.parent: addChildFront(child,sibling.parent)
+            else: addChildFront(child,sibling)
+            nodo = parent
+        else: nodo = child
+        return nodo
 
     def notExprPrime(self): # HERE
+        nodo = None
         # notExprPrime ::= not CompExpr notExprPrime
         if self.current_token == "NOT":
+            nodo = Node("NOT")
             self.getToken()
-            self.CompExpr()
-            self.notExprPrime()
+            child1 = self.CompExpr()
+            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"] or child1.name in FIRST['CompOp']:
+                child1.left = False
+            
+            child2 = self.notExprPrime()
+            child1.parent = nodo
+            if child2 != None:
+                aux = goDownLeft(child2)
+                if aux.parent: addChildFront(nodo, aux.parent)
+                else: addChildFront(nodo, child2)
+                nodo = child2
 
         #notExprPrime ::= epsilon
         if self.current_token not in FOLLOW["NotExprPrime"]:
+            nodo = self.errorNode()
             self.add_error(Error("NotExprPrime", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['NotExprPrime'] and self.current_token != "EOF":
                 self.getToken()
+        return nodo
 
     def CompExpr(self): # COMPLETADO
         #CompExpr ::=  IntExpr CompExprPrime
