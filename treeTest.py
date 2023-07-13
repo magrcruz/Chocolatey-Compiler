@@ -303,13 +303,28 @@ class TestTree():
         render_tree(root)
 
     def CompExpr(self):
-        self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ INTEGER EQ INTEGER NEWLINE".split()
+        self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ ID EQ STRING NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.CompExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID MUL INTEGER ADD ID EQ INTEGER NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.CompExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID MUL INTEGER ADD ID EQ INTEGER ADD ID NEWLINE".split()
         self.parser.getToken()
         root = self.parser.CompExpr()
         render_tree(root)
 
     def CompExprPrime(self):
-        self.parser.TOKEN_INPUT = "EQ INTEGER EQ INTEGER EQ INTEGER NEWLINE".split()
+        self.parser.TOKEN_INPUT = "EQ ID EQ INTEGER EQ STRING NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.CompExprPrime()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "EQ ID MUL INTEGER ADD STRING ADD INTEGER NEWLINE".split()
         self.parser.getToken()
         root = self.parser.CompExprPrime()
         render_tree(root)
@@ -333,6 +348,13 @@ class TestTree():
         '''
 
         self.parser.TOKEN_INPUT = "ID ADD INTEGER MOD ID ADD INTEGER NEWLINE".split()
+        #No soportado por la gramatica, necesitaria parentesis
+        self.parser.getToken()
+        root = self.parser.IntExpr()
+        render_tree(root)
+        print("No soportado por la gramatica")
+
+        self.parser.TOKEN_INPUT = "ID MUL INTEGER ADD ID MUL INTEGER MUL STRING NEWLINE".split()
         #No soportado por la gramatica, necesitaria parentesis
         self.parser.getToken()
         root = self.parser.IntExpr()
@@ -386,7 +408,6 @@ class TestTree():
         └── INTEGER
         '''
         
-
     def TermPrime(self):
         #TermPrime ::=  ''
         self.parser.TOKEN_INPUT = "NEWLINE".split()
@@ -606,4 +627,4 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.Term()
+testTree.CompExpr()

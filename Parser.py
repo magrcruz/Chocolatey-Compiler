@@ -671,17 +671,19 @@ class Parser:
         parent = self.CompExprPrime()
         if parent != None:
             sibling = goDownLeft(parent)
-            addChildFront(child,sibling.parent)
+            if sibling.parent: addChildFront(child,sibling.parent)
+            else: addChildFront(child,sibling)
             nodo = parent
         else: nodo = child
         return nodo
 
-    def CompExprPrime(self): # COMPLETADO
+    def CompExprPrime(self): #
         nodo = None
         #CompExprPrime ::=   CompOp IntExpr CompExprPrime
         if self.current_token in FIRST['CompOp']:
             nodo = self.CompOp()
             child1 = self.IntExpr()
+            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"]: child1.left = False
             child2 = self.CompExprPrime()
             child1.parent = nodo
             if child2 != None:
@@ -698,11 +700,11 @@ class Parser:
                 self.getToken()
         return nodo
 
-    def IntExpr(self): # COMPLETADO
+    def IntExpr(self):
         # IntExpr ::= Term IntExprPrime
-        nodo = Node("")
+        nodo = None
         child = self.Term()
-        child.left = False
+        #child.left = False
         parent = self.IntExprPrime()
         if parent != None:
             sibling = goDownLeft(parent)
@@ -712,7 +714,7 @@ class Parser:
         else: nodo = child
         return nodo
 
-    def IntExprPrime(self): # COMPLETADO
+    def IntExprPrime(self):
         nodo = None
         # IntExprPrime ::= -|+ Term IntExprPrime
         if self.current_token in ["ADD", "SUB"]:
@@ -720,8 +722,7 @@ class Parser:
             self.getToken()
             child = self.Term()
             #buscar si alguno de sus hijos es de menor rango y poner como left False
-            if child.name in ["MUL", "DIV", "MOD"]:
-                child.left = False
+            if child.name in ["MUL", "DIV", "MOD"]: child.left = False
             child.parent = nodo
             child2 = self.IntExprPrime()
             if child2 != None:
