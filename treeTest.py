@@ -327,15 +327,33 @@ class TestTree():
         render_tree(root)
 
     def Term(self):
+        self.parser.TOKEN_INPUT = "INTEGER MUL INTEGER MOD INTEGER DIV INTEGER NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.Term()
+        render_tree(root)
+
         self.parser.TOKEN_INPUT = "INTEGER MUL INTEGER MOD INTEGER NEWLINE".split()
         self.parser.getToken()
         root = self.parser.Term()
         render_tree(root)
+        '''EXPECTED OUTPUT
+        MOD
+        ├── MUL
+        │   ├── INTEGER
+        │   └── INTEGER
+        └── INTEGER
+        '''
 
         self.parser.TOKEN_INPUT = "INTEGER NEWLINE".split()
         self.parser.getToken()
         root = self.parser.Term()
         render_tree(root)
+
+        self.parser.TOKEN_INPUT = "INTEGER MUL INTEGER MUL INTEGER MOD INTEGER NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.Term()
+        render_tree(root)
+        
 
     def TermPrime(self):
         #TermPrime ::=  ''
@@ -345,16 +363,57 @@ class TestTree():
         print(">> == WORKS EMPTY == <<\n" + str(root == None)+"\n")
 
         # TermPrime ::= * Factor TermPrime 
-        self.parser.TOKEN_INPUT = "MUL ID NEWLINE".split()
-        self.parser.getToken()
-        root = self.parser.TermPrime()
-        render_tree(root)
+        #self.parser.TOKEN_INPUT = "MUL ID NEWLINE".split()
+        #self.parser.getToken()
+        #root = self.parser.TermPrime()
+        #render_tree(root)
 
         # TermPrime ::= * Factor TermPrime 
         self.parser.TOKEN_INPUT = "MUL ID LPAREN INTEGER COMMA INTEGER RPAREN NEWLINE".split()
         self.parser.getToken()
         root = self.parser.TermPrime()
         render_tree(root)
+
+        # TermPrime ::= * Factor TermPrime 
+        self.parser.TOKEN_INPUT = "MUL ID MOD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.TermPrime()
+        render_tree(root)
+        '''EXPECTED OUTPUT
+        First it needs to perform the mul then the mod
+        MOD
+        ├── MUL
+        │   └── ID
+        └── ID
+        '''
+
+        self.parser.TOKEN_INPUT = "MUL ID MOD ID DIV ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.TermPrime()
+        render_tree(root)
+        '''EXPECTED OUTPUT
+        DIV
+        ├── MOD
+        │   ├── MUL
+        │   │   └── ID
+        │   └── ID
+        └── ID
+        '''
+
+        self.parser.TOKEN_INPUT = "MUL ID MOD ID DIV ID MOD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.TermPrime()
+        render_tree(root)
+        '''EXPECTED OUTPUT
+        MOD
+        ├── DIV
+        │   ├── MOD
+        │   │   ├── MUL
+        │   │   │   └── ID
+        │   │   └── ID
+        │   └── ID
+        └── ID
+        '''
 
     def Factor(self):
         producciones = [
@@ -515,5 +574,6 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.CompExpr()
+#testTree.TermPrime()
+testTree.Term()
 #testTree.DefList()

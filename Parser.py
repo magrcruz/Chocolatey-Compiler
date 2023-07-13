@@ -5,7 +5,7 @@ from anytree import Node, RenderTree
 from anytree.exporter import DotExporter
 from anytree.search import findall
 
-DEBUG = False
+DEBUG = True
 global TOKEN_INPUT
 TOKEN_INPUT = ["ID", ":=", "INT_NUM", "SUB", "INT_NUM", "SUB",  "ID", "EOF"]
 
@@ -14,6 +14,18 @@ def render_tree(root: object) -> None:
     for pre, fill, node in RenderTree(root):
         print("%s%s" % (pre, node.name))
     print("")
+
+def addChildFront(child,parent):
+    parent.children = list([child]) + list(parent.children)
+
+def goDownLeft(nodo):
+    temp1, temp2 = nodo, None
+    while temp1!=None:
+        temp2 = temp1
+        temp1 = temp1.children
+        if len(temp1): temp1=temp1[0]
+        else: temp1 = None
+    return temp2
 
 class Parser:
     def __init__(self, escaner):
@@ -719,12 +731,11 @@ class Parser:
         #Term ::=  Factor TermPrime
         nodo = Node("")
         child1 = self.Factor()
-        parent = self.TermPrime()
+        parent = self.TermPrime()#Si esto sucede debe agregar el hijo al nivel mas bajo a la izquierda
         if parent != None:
-            child1.parent = nodo
-            nodo.name = parent.name
-            for i,c in enumerate(parent.children):
-                c.parent = nodo
+            sibling = goDownLeft(parent)
+            addChildFront(child1,sibling.parent)
+            nodo = parent
         else: nodo = child1
         return nodo
     
@@ -738,7 +749,12 @@ class Parser:
             child.parent = nodo
             child2 = self.TermPrime()
             if child2 != None:
-                child2.parent = nodo
+                aux = goDownLeft(child2)
+                if aux.parent:
+                    addChildFront(nodo, aux.parent)
+                else:
+                    addChildFront(nodo, child2)
+                nodo = child2
 
         #TermPrime ::=  ε
         if self.current_token not in FOLLOW["TermPrime"]:
@@ -781,9 +797,10 @@ class Parser:
             if self.current_token == "RPAREN":
                 self.getToken()
                 addError = False
-
-        if addError: 
+        
+        else:
             nodo = self.errorNode()#
+
         if addError or self.current_token not in FOLLOW["Factor"]:
             self.add_error(Error("Factor", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['Factor'] and self.current_token != "EOF":
