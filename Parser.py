@@ -22,9 +22,12 @@ def goDownLeft(nodo):
     temp1, temp2 = nodo, None
     while temp1!=None:
         temp2 = temp1
-        temp1 = temp1.children
-        if len(temp1): temp1=temp1[0]
-        else: temp1 = None
+        temp1 = list(temp1.children)
+        if len(temp1):
+            if not hasattr(temp1[0],"left") or (hasattr(temp1[0],"left") and temp1[0].left):#Ver si existe o bota true
+                temp1=temp1[0]
+                continue
+        temp1 = None
     return temp2
 
 class Parser:
@@ -648,7 +651,7 @@ class Parser:
         self.CompExpr()
         self.notExprPrime()
 
-    def notExprPrime(self): # COMPLETADO
+    def notExprPrime(self): # HERE
         # notExprPrime ::= not CompExpr notExprPrime
         if self.current_token == "NOT":
             self.getToken()
@@ -667,10 +670,10 @@ class Parser:
         child = self.IntExpr()
         parent = self.CompExprPrime()
         if parent != None:
-            child.parent = parent
+            sibling = goDownLeft(parent)
+            addChildFront(child,sibling.parent)
             nodo = parent
-        else:
-            nodo = child
+        else: nodo = child
         return nodo
 
     def CompExprPrime(self): # COMPLETADO
@@ -681,8 +684,11 @@ class Parser:
             child1 = self.IntExpr()
             child2 = self.CompExprPrime()
             child1.parent = nodo
-            if child2!=None:
-                child2.parent = nodo
+            if child2 != None:
+                aux = goDownLeft(child2)
+                if aux.parent: addChildFront(nodo, aux.parent)
+                else: addChildFront(nodo, child2)
+                nodo = child2
 
         # CompExprPrime ::=  ''
         if self.current_token not in FOLLOW["CompExprPrime"]:
@@ -696,13 +702,13 @@ class Parser:
         # IntExpr ::= Term IntExprPrime
         nodo = Node("")
         child = self.Term()
-        child2 = self.IntExprPrime()
-        if child2!=None: 
-            nodo.name = child2.name
-            childs = []
-            child.parent = nodo
-            for c in child2.children: childs.append(c)
-            for c in childs: c.parent = nodo
+        child.left = False
+        parent = self.IntExprPrime()
+        if parent != None:
+            sibling = goDownLeft(parent)
+            if sibling.parent: addChildFront(child,sibling.parent)
+            else: addChildFront(child,sibling)
+            nodo = parent
         else: nodo = child
         return nodo
 
@@ -713,11 +719,16 @@ class Parser:
             nodo = Node(self.current_token.value)
             self.getToken()
             child = self.Term()
-            child2 = self.IntExprPrime()
+            #buscar si alguno de sus hijos es de menor rango y poner como left False
+            if child.name in ["MUL", "DIV", "MOD"]:
+                child.left = False
             child.parent = nodo
-
-            if child2!=None:
-                child2.parent = nodo
+            child2 = self.IntExprPrime()
+            if child2 != None:
+                aux = goDownLeft(child2)
+                if aux.parent: addChildFront(nodo, aux.parent)
+                else: addChildFront(nodo, child2)
+                nodo = child2
 
         #IntExprPrime ::= epsilon
         if self.current_token not in FOLLOW["IntExprPrime"]:
@@ -734,7 +745,8 @@ class Parser:
         parent = self.TermPrime()#Si esto sucede debe agregar el hijo al nivel mas bajo a la izquierda
         if parent != None:
             sibling = goDownLeft(parent)
-            addChildFront(child1,sibling.parent)
+            if sibling.parent: addChildFront(child1,sibling.parent)
+            else: addChildFront(child1,sibling)
             nodo = parent
         else: nodo = child1
         return nodo
@@ -750,11 +762,10 @@ class Parser:
             child2 = self.TermPrime()
             if child2 != None:
                 aux = goDownLeft(child2)
-                if aux.parent:
-                    addChildFront(nodo, aux.parent)
-                else:
-                    addChildFront(nodo, child2)
+                if aux.parent: addChildFront(nodo, aux.parent)
+                else: addChildFront(nodo, child2)
                 nodo = child2
+            
 
         #TermPrime ::=  ε
         if self.current_token not in FOLLOW["TermPrime"]:
@@ -852,7 +863,6 @@ class Parser:
         nodo = None
         if self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]:
             nodo = Node(self.current_token.value)
-            print(nodo)
             self.getToken()
 
         if self.current_token not in FOLLOW["Literal"]:

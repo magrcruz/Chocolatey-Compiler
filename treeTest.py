@@ -315,13 +315,36 @@ class TestTree():
         render_tree(root)
 
     def IntExpr(self):
-        self.parser.TOKEN_INPUT = "INTEGER ADD INTEGER ADD INTEGER NEWLINE".split()
+        self.parser.TOKEN_INPUT = "ID ADD INTEGER ADD INTEGER NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.IntExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID ADD INTEGER MOD INTEGER NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.IntExpr()
+        render_tree(root)
+        '''EXPECTED OUTPUT
+        ADD
+        ├── ID
+        └── MOD
+            ├── INTEGER
+            └── INTEGER
+        '''
+
+        self.parser.TOKEN_INPUT = "ID ADD INTEGER MOD ID ADD INTEGER NEWLINE".split()
+        #No soportado por la gramatica, necesitaria parentesis
         self.parser.getToken()
         root = self.parser.IntExpr()
         render_tree(root)
 
     def IntExprPrime(self):
-        self.parser.TOKEN_INPUT = "ADD STRING ADD STRING NEWLINE".split()
+        self.parser.TOKEN_INPUT = "ADD STRING SUB INTEGER ADD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.IntExprPrime()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ADD STRING MOD STRING NEWLINE".split()
         self.parser.getToken()
         root = self.parser.IntExprPrime()
         render_tree(root)
@@ -353,6 +376,15 @@ class TestTree():
         self.parser.getToken()
         root = self.parser.Term()
         render_tree(root)
+        '''EXPECTED OUTPUT
+        MOD
+        ├── MUL
+        │   ├── MUL
+        │   │   ├── INTEGER
+        │   │   └── INTEGER
+        │   └── INTEGER
+        └── INTEGER
+        '''
         
 
     def TermPrime(self):
@@ -574,6 +606,4 @@ class TestTree():
 
 
 testTree = TestTree()
-#testTree.TermPrime()
 testTree.Term()
-#testTree.DefList()
