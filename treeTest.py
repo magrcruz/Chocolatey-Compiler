@@ -302,6 +302,52 @@ class TestTree():
         root = self.parser.ReturnExpr()
         render_tree(root)
 
+    def orExpr(self):
+        #Revisar si la produccion 1 esta bien
+        #self.parser.TOKEN_INPUT = "ID MUL INTEGER ADD INTEGER MUL ID SUB STRING EQ INTEGER NOT TRUE AND FALSE OR TRUE NEWLINE".split()
+        #self.parser.getToken()
+        #root = self.parser.orExpr()
+        #render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID AND TRUE NOT FALSE MUL INTEGER NOT STRING AND TRUE MOD NONE OR TRUE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.orExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID AND TRUE NOT FALSE MUL INTEGER NOT STRING AND TRUE MOD NONE OR ID AND TRUE NOT FALSE MUL INTEGER NOT STRING AND TRUE MOD NONE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.orExpr()
+        render_tree(root)
+        
+
+    def orExprPrime(self):
+        self.parser.TOKEN_INPUT = "OR TRUE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.orExprPrime()
+        render_tree(root)
+
+    def andExpr(self):
+        self.parser.TOKEN_INPUT = "ID AND ID NOT ID AND INTEGER EQ INTEGER NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.andExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID AND TRUE NOT FALSE MUL INTEGER NOT STRING AND TRUE MOD NONE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.andExpr()
+        render_tree(root)
+
+    def andExprPrime(self):
+        self.parser.TOKEN_INPUT = "AND FALSE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.andExprPrime()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "AND TRUE NOT FALSE MUL INTEGER NOT STRING AND TRUE MOD NONE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.andExprPrime()
+        render_tree(root)
+
     def notExpr(self):
         self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ ID EQ STRING NEWLINE".split()
         self.parser.getToken()
@@ -309,6 +355,16 @@ class TestTree():
         render_tree(root)
 
         self.parser.TOKEN_INPUT = "ID NOT ID MUL INTEGER ADD ID EQ INTEGER ADD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.notExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "INTEGER EQ INTEGER EQ ID EQ STRING NOT ID MUL INTEGER ADD ID EQ INTEGER ADD ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.notExpr()
+        render_tree(root)
+
+        self.parser.TOKEN_INPUT = "ID NOT ID NOT ID NOT ID NEWLINE".split()
         self.parser.getToken()
         root = self.parser.notExpr()
         render_tree(root)
@@ -661,4 +717,4 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.notExpr()
+testTree.orExpr()

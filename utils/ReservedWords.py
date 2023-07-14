@@ -3,7 +3,7 @@ KEYWORDS = {
     "None" : "NONE", 
     "True" : "TRUE", 
     "and" : "AND", 
-    "as" : "AS", 
+#    "as" : "AS", 
     "assert" : "ASSERT", 
     "async" : "ASYNC", 
     "await" : "AWAIT", 

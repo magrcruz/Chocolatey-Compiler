@@ -5,7 +5,7 @@ Nonterminal = ['S', 'Program', 'DefList', 'Def', 'TypedVar', 'Type', 'TypedVarLi
 
 rules = {}
 def getRules():
-    with open("grammar.txt") as file:
+    with open("test/grammar.txt") as file:
         for linea in file:
             nt,produccion = linea.split(" ::= ")
             if produccion == "''\n":

@@ -130,3 +130,14 @@ for i in OPER_DELIMITERS:
     FIRST[OPER_DELIMITERS[i]]=[OPER_DELIMITERS[i]]
 for i in OPER_DELIMITERS_2:
     FIRST[OPER_DELIMITERS_2[i]]=[OPER_DELIMITERS_2[i]]
+
+OPERS = [ ["MUL", "DIV", "MOD"],
+         ["ADD","SUB"],
+         FIRST['CompOp'],
+         ["NOT"],
+         ["AND"],
+         ["OR"]]
+LEVELS = {}
+for i, c in enumerate(OPERS):
+    for j in c:
+        LEVELS[j] = i

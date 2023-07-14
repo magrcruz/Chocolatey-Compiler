@@ -21,14 +21,33 @@ def addChildFront(child,parent):
 def goDownLeft(nodo):
     temp1, temp2 = nodo, None
     while temp1!=None:
+        #print("esta en ", temp1)
         temp2 = temp1
         temp1 = list(temp1.children)
         if len(temp1):
-            if not hasattr(temp1[0],"left") or (hasattr(temp1[0],"left") and temp1[0].left):#Ver si existe o bota true
-                temp1=temp1[0]
+            if not hasattr(temp1[0],"left"):#Ver si existe o bota true
+                temp1 = temp1[0]
                 continue
+            elif (hasattr(temp1[0],"left") and temp1[0].left):#tiene que bajar uno mas
+                temp2 = temp1[0]
         temp1 = None
     return temp2
+
+def arrangePriority(parent, child):
+    #Verifica si tiene que hacer el cambio y que el posible padre tenga a su hijo correcto
+    if parent != None:
+        sibling = goDownLeft(parent)
+        #print("El sibling es: ", sibling.name)
+        #print("El padre es ", sibling.parent)
+        if sibling.parent:
+            if (sibling.name in LEVELS and sibling.parent.name in LEVELS
+                and (LEVELS[sibling.name] >= LEVELS[sibling.parent.name])):
+                addChildFront(child,sibling)
+            else:
+                addChildFront(child,sibling.parent)
+        else: addChildFront(child,sibling)
+        return parent
+    return child
 
 class Parser:
     def __init__(self, escaner):
@@ -612,15 +631,22 @@ class Parser:
 
     def orExpr(self): # COMPLETADO
         # orExpr ::= andExpr orExprPrime
-        self.andExpr()
-        self.orExprPrime()
+        child = self.andExpr()
+        parent = self.orExprPrime()
+        return arrangePriority(parent,child)
 
     def orExprPrime(self): # COMPLETADO
         # orExprPrime ::= or andExpr orExprPrime
         if self.current_token == "OR":
+            nodo = Node("OR")
             self.getToken()
-            self.andExpr()
-            self.orExprPrime()
+            child1 = self.andExpr()
+            if (child1.name in ["MUL", "DIV", "MOD","ADD","SUB", "NOT","AND"]
+                or child1.name in FIRST['CompOp']):
+                child1.left = False
+            child1.parent = nodo
+            child2 = self.orExprPrime()
+            return arrangePriority(child2,nodo)
 
         #orExprPrime ::= epsilon
         if self.current_token not in FOLLOW["OrExprPrime"]:
@@ -630,36 +656,43 @@ class Parser:
 
     def andExpr(self): # COMPLETADO
         #andExpr ::= notExpr andExprPrime
-        self.notExpr()
-        self.andExprPrime()
+        child = self.notExpr()
+        #print("notExpr")
+        #render_tree(child)
+        parent = self.andExprPrime()
+        #print("andExprPrime")
+        #render_tree(parent)
+        return arrangePriority(parent,child)
 
     def andExprPrime(self): # COMPLETADO
         #andExprPrime ::=   and notExpr andExprPrime
+        nodo = None
         if self.current_token == "AND":
+            nodo = Node("AND")
             self.getToken()
-            self.notExpr()
-            self.andExprPrime()
+            child1 = self.notExpr()
+            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB", "NOT"] or child1.name in FIRST['CompOp']:
+                child1.left = False
+            child2 = self.andExprPrime()
+            child1.parent = nodo
+            return arrangePriority(child2,nodo)
 
         #andExprPrime ::=  ''
         if self.current_token not in FOLLOW["AndExprPrime"]:
+            nodo = self.errorNode()
             self.add_error(Error("AndExprPrime", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['AndExprPrime'] and self.current_token != "EOF":
                 self.getToken()
-
-    def notExpr(self): # COMPLETADO
+        return nodo
+    
+    def notExpr(self):
         # notExpr ::= CompExpr notExprPrime
-        nodo = None
         child = self.CompExpr()
         parent = self.notExprPrime()
-        if parent != None:
-            sibling = goDownLeft(parent)
-            if sibling.parent: addChildFront(child,sibling.parent)
-            else: addChildFront(child,sibling)
-            nodo = parent
-        else: nodo = child
-        return nodo
+        return arrangePriority(parent,child)
 
-    def notExprPrime(self): # HERE
+
+    def notExprPrime(self):
         nodo = None
         # notExprPrime ::= not CompExpr notExprPrime
         if self.current_token == "NOT":
@@ -668,14 +701,9 @@ class Parser:
             child1 = self.CompExpr()
             if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"] or child1.name in FIRST['CompOp']:
                 child1.left = False
-            
-            child2 = self.notExprPrime()
             child1.parent = nodo
-            if child2 != None:
-                aux = goDownLeft(child2)
-                if aux.parent: addChildFront(nodo, aux.parent)
-                else: addChildFront(nodo, child2)
-                nodo = child2
+            child2 = self.notExprPrime()
+            return arrangePriority(child2,nodo)
 
         #notExprPrime ::= epsilon
         if self.current_token not in FOLLOW["NotExprPrime"]:
@@ -687,16 +715,9 @@ class Parser:
 
     def CompExpr(self): # COMPLETADO
         #CompExpr ::=  IntExpr CompExprPrime
-        nodo = None
         child = self.IntExpr()
         parent = self.CompExprPrime()
-        if parent != None:
-            sibling = goDownLeft(parent)
-            if sibling.parent: addChildFront(child,sibling.parent)
-            else: addChildFront(child,sibling)
-            nodo = parent
-        else: nodo = child
-        return nodo
+        return arrangePriority(parent,child)
 
     def CompExprPrime(self): #
         nodo = None
@@ -707,11 +728,7 @@ class Parser:
             if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"]: child1.left = False
             child2 = self.CompExprPrime()
             child1.parent = nodo
-            if child2 != None:
-                aux = goDownLeft(child2)
-                if aux.parent: addChildFront(nodo, aux.parent)
-                else: addChildFront(nodo, child2)
-                nodo = child2
+            return arrangePriority(child2,nodo)
 
         # CompExprPrime ::=  ''
         if self.current_token not in FOLLOW["CompExprPrime"]:
