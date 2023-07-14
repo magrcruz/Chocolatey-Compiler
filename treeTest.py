@@ -1,8 +1,19 @@
 from Parser import *
+from anytree import PreOrderIter
 
 class TestTree():
     def __init__(self):
         self.parser = Parser(None)
+
+    def checkError(self, nodo):
+        outcast = [node.name for node in PreOrderIter(nodo, filter_=lambda n: not n.is_leaf and len(list(n.children)) !=2 ) ]
+        for i in outcast: print("Falla en ", i)
+        return len(outcast)!=0
+    
+    def oneIsLeft(self,nodo):
+        outcast = [node.name for node in PreOrderIter(nodo, filter_=lambda n: hasattr(n,"left") and n.left) ]
+        for i in outcast: print("Es left en", i)
+        return len(outcast)!=0
 
     def Program(self):
         self.parser.TOKEN_INPUT = "DEF ID LPAREN RPAREN ARROW INT COLON NEWLINE IDENT PASS NEWLINE DEDENT".split()
@@ -308,6 +319,14 @@ class TestTree():
         #self.parser.getToken()
         #root = self.parser.orExpr()
         #render_tree(root)
+        #print(self.checkError(root))
+
+        self.parser.TOKEN_INPUT = "ID MUL INTEGER ADD INTEGER MUL ID SUB STRING EQ INTEGER NOT TRUE EQ ID AND FALSE OR TRUE NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.orExpr()
+        render_tree(root)
+        print(self.checkError(root))
+        print("Tiene left ",self.oneIsLeft(root))
 
         self.parser.TOKEN_INPUT = "ID AND TRUE NOT FALSE MUL INTEGER NOT STRING AND TRUE MOD NONE OR TRUE NEWLINE".split()
         self.parser.getToken()
@@ -336,6 +355,12 @@ class TestTree():
         self.parser.getToken()
         root = self.parser.andExpr()
         render_tree(root)
+
+        self.parser.TOKEN_INPUT = "INTEGER MUL INTEGER AND ID MUL FALSE EQ ID AND ID MUL FALSE EQ ID NEWLINE".split()
+        self.parser.getToken()
+        root = self.parser.andExpr()
+        render_tree(root)
+        
 
     def andExprPrime(self):
         self.parser.TOKEN_INPUT = "AND FALSE NEWLINE".split()
@@ -420,7 +445,7 @@ class TestTree():
         render_tree(root)
 
     def IntExpr(self):
-        self.parser.TOKEN_INPUT = "ID ADD INTEGER ADD INTEGER NEWLINE".split()
+        self.parser.TOKEN_INPUT = "ID ADD INTEGER SUB INTEGER NEWLINE".split()
         self.parser.getToken()
         root = self.parser.IntExpr()
         render_tree(root)
@@ -445,7 +470,7 @@ class TestTree():
         print("No soportado por la gramatica")
 
         self.parser.TOKEN_INPUT = "ID MUL INTEGER ADD ID MUL INTEGER MUL STRING NEWLINE".split()
-        #No soportado por la gramatica, necesitaria parentesis
+        #No soportado por la gramatica desde intExpr, necesitaria parentesis
         self.parser.getToken()
         root = self.parser.IntExpr()
         render_tree(root)

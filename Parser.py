@@ -636,6 +636,7 @@ class Parser:
         return arrangePriority(parent,child)
 
     def orExprPrime(self): # COMPLETADO
+        nodo = None
         # orExprPrime ::= or andExpr orExprPrime
         if self.current_token == "OR":
             nodo = Node("OR")
@@ -650,9 +651,11 @@ class Parser:
 
         #orExprPrime ::= epsilon
         if self.current_token not in FOLLOW["OrExprPrime"]:
+            nodo = self.errorNode()
             self.add_error(Error("OrExprPrime", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['OrExprPrime'] and self.current_token != "EOF":
                 self.getToken()
+        return nodo
 
     def andExpr(self): # COMPLETADO
         #andExpr ::= notExpr andExprPrime

@@ -27,21 +27,25 @@ def derivar():
 
     while idx<len(production):
         if production[idx] in Nonterminal:#Se puede remplazar
-            status = ""
-            if idx>0: status+= Fore.BLUE + ' '.join(production[:idx]) + " " #lo ya parseado
-            status+= Fore.RED + production[idx] +" " #Simbolo a reemplazar
-            status+= Fore.GREEN + ' '.join(production[idx+1:]) # lo que aun falta reemplazar
-            print(status)
-            for ridx, rule in enumerate(rules[production[idx]]):
-                if rule !="": print(Fore.BLUE + str(ridx), Fore.WHITE + ": ", ' '.join(rule))
-                else: print(Fore.BLUE + str(ridx), Fore.WHITE + ": ", "''")
+            if len(rules[production[idx]])==1:#si solo hay una opcion para seguir la escoge
+                production[idx:idx+1] = rules[production[idx]][0]
+            else:
+                status = ""
+                if idx>0: status+= Fore.BLUE + ' '.join(production[:idx]) + " " #lo ya parseado
+                status+= Fore.RED + production[idx] +" " #Simbolo a reemplazar
+                status+= Fore.GREEN + ' '.join(production[idx+1:]) # lo que aun falta reemplazar
+                print(status)
 
-            seleccion = input("Ingrese regla a utilizar ")
+                for ridx, rule in enumerate(rules[production[idx]]):
+                    if rule !="": print(Fore.BLUE + str(ridx), Fore.WHITE + ": ", ' '.join(rule))
+                    else: print(Fore.BLUE + str(ridx), Fore.WHITE + ": ", "''")
 
-            # Insertar todos los elementos de lista2 en lista1 en el índice especificado
-            production[idx:idx+1] = rules[production[idx]][int(seleccion)]
+                seleccion = input("Ingrese regla a utilizar ")
 
-            print("PRODUCCION "+Fore.WHITE + ' '.join(production))
+                # Insertar todos los elementos de lista2 en lista1 en el índice especificado
+                production[idx:idx+1] = rules[production[idx]][int(seleccion)]
+
+            print("PRODUCCION ::= "+Fore.WHITE + ' '.join(production))
         else:
             idx+=1
 
