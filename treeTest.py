@@ -750,4 +750,4 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.Term()
+testTree.IntExpr()

@@ -742,34 +742,28 @@ class Parser:
 
     def IntExpr(self):
         # IntExpr ::= Term IntExprPrime
-        nodo = None
-        child = self.Term()
-        #child.left = False
-        parent = self.IntExprPrime()
-        if parent != None:
-            sibling = goDownLeft(parent)
-            if sibling.parent: addChildFront(child,sibling.parent)
-            else: addChildFront(child,sibling)
-            nodo = parent
-        else: nodo = child
-        return nodo
+        prime, tofill = Place(), Place()
+        child1 = self.Term()
+        self.IntExprPrime(prime, tofill)
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
 
-    def IntExprPrime(self):
+    def IntExprPrime(self, head, tofill):
         nodo = None
         # IntExprPrime ::= -|+ Term IntExprPrime
         if self.current_token in ["ADD", "SUB"]:
             nodo = Node(self.current_token.value)
             self.getToken()
-            child = self.Term()
-            #buscar si alguno de sus hijos es de menor rango y poner como left False
-            if child.name in ["MUL", "DIV", "MOD"]: child.left = False
-            child.parent = nodo
-            child2 = self.IntExprPrime()
+            head.saveNodo(nodo)
+            if tofill.empty: tofill.start(nodo)
+
+            child1 = self.Term()
+            child1.parent = nodo
+            child2 = self.IntExprPrime(head, tofill)
             if child2 != None:
-                aux = goDownLeft(child2)
-                if aux.parent: addChildFront(nodo, aux.parent)
-                else: addChildFront(nodo, child2)
-                nodo = child2
+                addChildFront(nodo, child2)
 
         #IntExprPrime ::= epsilon
         if self.current_token not in FOLLOW["IntExprPrime"]:
@@ -789,7 +783,7 @@ class Parser:
             return prime.nodo
         return child1
    
-    def TermPrime(self,head,tofill):
+    def TermPrime(self, head, tofill):
         nodo = None
         #TermPrime ::=   *|//|% Factor TermPrime
         if self.current_token in ["MUL", "DIV", "MOD"]:
@@ -811,8 +805,6 @@ class Parser:
             while self.current_token not in FOLLOW['TermPrime'] and self.current_token != "EOF":
                 self.getToken()
         return nodo
-            
-
 
     def Factor(self):  # COMPLETADO
         addError = True
