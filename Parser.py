@@ -628,25 +628,30 @@ class Parser:
         while self.current_token not in FOLLOW['ExprPrime'] and self.current_token != "EOF":
             self.getToken()
 
-    def orExpr(self): # COMPLETADO
+    def orExpr(self):
         # orExpr ::= andExpr orExprPrime
-        child = self.andExpr()
-        parent = self.orExprPrime()
-        return arrangePriority(parent,child)
+        prime, tofill = Place(), Place()
+        child1 = self.andExpr()
+        self.orExprPrime(prime, tofill)
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
 
-    def orExprPrime(self): # COMPLETADO
+    def orExprPrime(self, head, tofill):
         nodo = None
         # orExprPrime ::= or andExpr orExprPrime
         if self.current_token == "OR":
             nodo = Node("OR")
             self.getToken()
+            head.saveNodo(nodo)
+            if tofill.empty: tofill.start(nodo)
+
             child1 = self.andExpr()
-            if (child1.name in ["MUL", "DIV", "MOD","ADD","SUB", "NOT","AND"]
-                or child1.name in FIRST['CompOp']):
-                child1.left = False
             child1.parent = nodo
-            child2 = self.orExprPrime()
-            return arrangePriority(child2,nodo)
+            child2 = self.orExprPrime(head, tofill)
+            if child2 != None:
+                addChildFront(nodo, child2)
 
         #orExprPrime ::= epsilon
         if self.current_token not in FOLLOW["OrExprPrime"]:
@@ -656,28 +661,30 @@ class Parser:
                 self.getToken()
         return nodo
 
-    def andExpr(self): # COMPLETADO
+    def andExpr(self):
         #andExpr ::= notExpr andExprPrime
-        child = self.notExpr()
-        #print("notExpr")
-        #render_tree(child)
-        parent = self.andExprPrime()
-        #print("andExprPrime")
-        #render_tree(parent)
-        return arrangePriority(parent,child)
+        prime, tofill = Place(), Place()
+        child1 = self.notExpr()
+        self.andExprPrime(prime, tofill)
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
 
-    def andExprPrime(self): # COMPLETADO
+    def andExprPrime(self, head, tofill):
         #andExprPrime ::=   and notExpr andExprPrime
         nodo = None
         if self.current_token == "AND":
             nodo = Node("AND")
             self.getToken()
+            head.saveNodo(nodo)
+            if tofill.empty: tofill.start(nodo)
+
             child1 = self.notExpr()
-            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB", "NOT"] or child1.name in FIRST['CompOp']:
-                child1.left = False
-            child2 = self.andExprPrime()
             child1.parent = nodo
-            return arrangePriority(child2,nodo)
+            child2 = self.andExprPrime(head, tofill)
+            if child2 != None:
+                addChildFront(nodo, child2)
 
         #andExprPrime ::=  ''
         if self.current_token not in FOLLOW["AndExprPrime"]:
@@ -689,23 +696,29 @@ class Parser:
     
     def notExpr(self):
         # notExpr ::= CompExpr notExprPrime
-        child = self.CompExpr()
-        parent = self.notExprPrime()
-        return arrangePriority(parent,child)
+        prime, tofill = Place(), Place()
+        child1 = self.CompExpr()
+        self.notExprPrime(prime, tofill)
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
 
 
-    def notExprPrime(self):
+    def notExprPrime(self, head, tofill):
         nodo = None
         # notExprPrime ::= not CompExpr notExprPrime
         if self.current_token == "NOT":
             nodo = Node("NOT")
             self.getToken()
+            head.saveNodo(nodo)
+            if tofill.empty: tofill.start(nodo)
+
             child1 = self.CompExpr()
-            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"] or child1.name in FIRST['CompOp']:
-                child1.left = False
             child1.parent = nodo
-            child2 = self.notExprPrime()
-            return arrangePriority(child2,nodo)
+            child2 = self.notExprPrime(head, tofill)
+            if child2 != None:
+                addChildFront(nodo, child2)
 
         #notExprPrime ::= epsilon
         if self.current_token not in FOLLOW["NotExprPrime"]:
@@ -717,20 +730,27 @@ class Parser:
 
     def CompExpr(self): # COMPLETADO
         #CompExpr ::=  IntExpr CompExprPrime
-        child = self.IntExpr()
-        parent = self.CompExprPrime()
-        return arrangePriority(parent,child)
+        prime, tofill = Place(), Place()
+        child1 = self.IntExpr()
+        self.CompExprPrime(prime, tofill)
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
 
-    def CompExprPrime(self): #
+    def CompExprPrime(self, head, tofill): #
         nodo = None
         #CompExprPrime ::=   CompOp IntExpr CompExprPrime
         if self.current_token in FIRST['CompOp']:
             nodo = self.CompOp()
+            head.saveNodo(nodo)
+            if tofill.empty: tofill.start(nodo)
+
             child1 = self.IntExpr()
-            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"]: child1.left = False
-            child2 = self.CompExprPrime()
             child1.parent = nodo
-            return arrangePriority(child2,nodo)
+            child2 = self.CompExprPrime(head, tofill)
+            if child2 != None:
+                addChildFront(nodo, child2)
 
         # CompExprPrime ::=  ''
         if self.current_token not in FOLLOW["CompExprPrime"]:
@@ -794,7 +814,7 @@ class Parser:
             
             child1 = self.Factor()
             child1.parent = nodo
-            child2 = self.TermPrime(head,tofill)
+            child2 = self.TermPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
             
