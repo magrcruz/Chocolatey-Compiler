@@ -487,7 +487,7 @@ class TestTree():
         render_tree(root)
 
     def Term(self):
-        self.parser.TOKEN_INPUT = "INTEGER MUL INTEGER MOD INTEGER DIV INTEGER NEWLINE".split()
+        self.parser.TOKEN_INPUT = "INTEGER MUL STRING MOD INTEGER DIV ID NEWLINE".split()
         self.parser.getToken()
         root = self.parser.Term()
         render_tree(root)
@@ -509,7 +509,7 @@ class TestTree():
         root = self.parser.Term()
         render_tree(root)
 
-        self.parser.TOKEN_INPUT = "INTEGER MUL INTEGER MUL INTEGER MOD INTEGER NEWLINE".split()
+        self.parser.TOKEN_INPUT = "ID MUL INTEGER MUL STRING MOD TRUE NEWLINE".split()
         self.parser.getToken()
         root = self.parser.Term()
         render_tree(root)
@@ -750,4 +750,4 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.TermPrime()
+testTree.Term()

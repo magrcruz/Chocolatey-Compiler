@@ -781,64 +781,23 @@ class Parser:
     
     def Term(self): # COMPLETADO
         #Term ::=  Factor TermPrime
-        nodo = Node("")
+        prime, tofill = Place(), Place()
         child1 = self.Factor()
-        parent = self.TermPrime()#Si esto sucede debe agregar el hijo al nivel mas bajo a la izquierda
-        if parent != None:
-            sibling = goDownLeft(parent)
-            if sibling.parent: addChildFront(child1,sibling.parent)
-            else: addChildFront(child1,sibling)
-            nodo = parent
-        else: nodo = child1
-        return nodo
-    
-    '''
-    def TermPrime(self, place): # COMPLETADO
-        nodo = None
-        #TermPrime ::=   *|//|% Factor TermPrime
-        if self.current_token in ["MUL", "DIV", "MOD"]:
-            nodo = Node(self.current_token.value)
-            self.getToken()
-            if place.empty: place.start(nodo)
-            der = self.Factor()
-            der.parent = nodo
-            prime = self.TermPrime(place)
-            if prime: nodo.parent = prime
-                
-        #TermPrime ::=  ε
-        if self.current_token not in FOLLOW["TermPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("TermPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['TermPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
-    '''
-    '''
-    def TermPrime(self, place): # COMPLETADO
-        nodo = None
-        #TermPrime ::=   *|//|% Factor TermPrime
-        if self.current_token in ["MUL", "DIV", "MOD"]:
-            nodo = Node(self.current_token.value)
-            self.getToken()
-            child = self.Factor()
-            child.parent = nodo
-            child2 = self.TermPrime()
-            if child2 != None:
-
-                aux = goDownLeft(child2)
-                if aux.parent: addChildFront(nodo, aux.parent)
-                else: addChildFront(nodo, child2)
-                nodo = child2
-'''
-
+        self.TermPrime(prime, tofill)#Si esto sucede debe agregar el hijo al nivel mas bajo a la izquierda
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
+   
     def TermPrime(self,head,tofill):
         nodo = None
         #TermPrime ::=   *|//|% Factor TermPrime
         if self.current_token in ["MUL", "DIV", "MOD"]:
             nodo = Node(self.current_token.value)
-            head.saveNodo(nodo)
             self.getToken()
+            head.saveNodo(nodo)
             if tofill.empty: tofill.start(nodo)
+            
             child1 = self.Factor()
             child1.parent = nodo
             child2 = self.TermPrime(head,tofill)
