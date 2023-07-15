@@ -275,7 +275,7 @@ class Parser:
         return nodo
 
     def Block(self):
-        nodo = Node("BLOCK")
+        nodo = Node("DO")
         #Block ::= IDENT Statement StatementList DEDENT
         addError = True
         if self.current_token == "IDENT":
@@ -337,9 +337,10 @@ class Parser:
         #Statement ::=  if Expr : NEWLINE Block ElifList Else
         elif self.current_token == "IF":
             self.getToken()
-            nodo = Node("IF")
+            nodo = Node("IF_BLOCK")
+            nodoif = Node("IF", parent=nodo)
             child1 = self.Expr()
-            child1.parent = nodo
+            child1.parent = nodoif
             if self.current_token == "COLON":
                 self.getToken()
             else:
@@ -356,7 +357,7 @@ class Parser:
                 self.getToken()
 
             child2 = self.Block()
-            child2.parent = nodo
+            child2.parent = nodoif
             child2 = self.ElifList()
             if child2!=None:
                 for _,c in enumerate(child2.children):
@@ -498,7 +499,9 @@ class Parser:
                     self.getToken()
                     node = Node("ELSE")
                     child1 = self.Block()
-                    child1.parent = node
+                    #Ya que no existe una condicion se puede asignar directamente a else
+                    for _,c in enumerate(child1.children):
+                        c.parent = node                 
                     addedError = False
                 else: self.add_error(Error("Else", "NEWLINE not founded", self.current_token.row))
             else: self.add_error(Error("Else", "COLON not founded", self.current_token.row))
