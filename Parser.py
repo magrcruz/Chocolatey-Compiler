@@ -58,6 +58,8 @@ class Parser:
             self.getToken()
 
     def add_error(self, error):
+        error.col = self.current_token.col
+        error.descripcion += ", found %s" % self.current_token.value
         self.error_list.append(error)
 
     def S(self):
@@ -66,20 +68,24 @@ class Parser:
         self.abstract_syntax_tree = self.Program()
         if self.current_token != "EOF":
             self.add_error("Se encontraron tokens no esperados")
-        #TODO VACIAR TOKEN LIST
 
         #Errores
-        #print("INFO PARSE - Completed with %i errors" % (len(self.error_list)))
-        #if len(self.error_list):
-        #    for i in self.error_list:
-        #        print("Error:  %s " % i)
-        #    return False
-        #else:
-        render_tree(self.abstract_syntax_tree)
+        print("INFO SCAN - Completed with %i errors" % (len(self.escaner.errores)))
+        if len(self.escaner.errores):
+            for i in self.escaner.errores:
+                print("Error:  %s " % i)
 
-        #Tree
-        #print("Rendering Tree")
-        #return True
+        print("INFO PARSE - Completed with %i errors" % (len(self.error_list)))
+        if len(self.error_list):
+            for i in self.error_list:
+                print("Error:  %s " % i)
+            return False
+        
+        elif not len(self.escaner.errores): #Si no hubo errores en el escaner ni en el parser
+            render_tree(self.abstract_syntax_tree)
+            return True
+        
+        return False
 
     def Program(self):
         self.getToken()
@@ -97,7 +103,7 @@ class Parser:
         nodo = None
         #DefList ::=  Def DefList
         
-        if self.current_token in FIRST['DefList']:
+        if self.current_token in FIRST['Def']:
             child1 = self.Def()
             if child1!=None:
                 nodo = Node("DefList")
@@ -110,9 +116,10 @@ class Parser:
   
         #DefList ::=  ''
         elif self.current_token not in FOLLOW['DefList']:
+            #En este caso esta bien ya que si hay un arror despues de la funcion corresponde a statement list
             self.add_error(Error("DefList", "Follow(DefList) not founded", self.current_token.row))
             while self.current_token not in FOLLOW['DefList'] and self.current_token not in ["EOF","NEWLINE"]:
-                    self.getToken()
+                self.getToken()
             if self.current_token == "NEWLINE" : self.getToken()
             nodo = self.errorNode()
         return nodo

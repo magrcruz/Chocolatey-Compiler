@@ -17,7 +17,7 @@ class Compiler:
     def begin(self, archivo):
         self.scanner.begin(archivo)
         self.parser.S()
-        self.showErrors()
+        #self.showErrors()
 
     def showErrors(self):
         print("INFO SCAN - Completed with %i errors" % (len(self.scanner.errores)))
