@@ -6,7 +6,7 @@ from anytree import Node, RenderTree
 from anytree.exporter import DotExporter
 from anytree.search import findall
 
-DEBUG = True
+DEBUG = False
 
 def render_tree(root: object) -> None:
     print(">> ===== ARBOL ===== <<")
@@ -16,37 +16,6 @@ def render_tree(root: object) -> None:
 
 def addChildFront(child,parent):
     parent.children = list([child]) + list(parent.children)
-
-def goDownLeft(nodo):
-    temp1, temp2 = nodo, None
-    while temp1!=None:
-        #print("esta en ", temp1)
-        temp2 = temp1
-        temp1 = list(temp1.children)
-        if len(temp1):
-            if not hasattr(temp1[0],"left"):#Ver si existe o bota true
-                temp1 = temp1[0]
-                continue
-            elif (hasattr(temp1[0],"left") and temp1[0].left):#tiene que bajar uno mas
-                temp2 = temp1[0]
-        temp1 = None
-    return temp2
-
-def arrangePriority(parent, child):
-    #Verifica si tiene que hacer el cambio y que el posible padre tenga a su hijo correcto
-    if parent != None:
-        sibling = goDownLeft(parent)
-        #print("El sibling es: ", sibling.name)
-        #print("El padre es ", sibling.parent)
-        if sibling.parent:
-            if (sibling.name in LEVELS and sibling.parent.name in LEVELS
-                and (LEVELS[sibling.name] >= LEVELS[sibling.parent.name])):
-                addChildFront(child,sibling)
-            else:
-                addChildFront(child,sibling.parent)
-        else: addChildFront(child,sibling)
-        return parent
-    return child
 
 class Parser:
     def __init__(self, escaner):
@@ -71,7 +40,12 @@ class Parser:
     
     def getToken(self):
         if not DEBUG:
-            self.current_token = self.escaner.getToken()
+            #Caso especial de ident y dedent
+            if self.current_token == "IDENT" or self.current_token == "DEDENT":
+                self.current_token.value -=1
+                if not self.current_token.value:
+                    self.current_token = self.escaner.getToken()
+            else: self.current_token = self.escaner.getToken()
         else:
             if len(self.TOKEN_INPUT):
                 self.current_token = Token(self.TOKEN_INPUT[0],self.TOKEN_INPUT[0],0,0)
@@ -384,7 +358,9 @@ class Parser:
             child2 = self.Block()
             child2.parent = nodo
             child2 = self.ElifList()
-            if child2!=None: child2.parent= nodo
+            if child2!=None:
+                for _,c in enumerate(child2.children):
+                    c.parent = nodo
             child2 = self.Else()
             if child2!=None: child2.parent= nodo
 
@@ -601,32 +577,46 @@ class Parser:
                 self.getToken()
         return nodo
 
-    def Expr(self): # INCOMPLETETREE
-        nodo = Node("EXPR TODO")
+    def Expr(self):
         #Expr ::=  orExpr ExprPrime
-        self.orExpr()
-        self.ExprPrime()
-        return nodo
+        prime, tofill = Place(), Place()
+        child1 = self.orExpr()
+        self.ExprPrime(prime, tofill)
+        if not prime.empty:
+            tofill.copyNodo(child1)
+            return prime.nodo
+        return child1
 
-    def ExprPrime(self): # COMPLETADO
+    def ExprPrime(self, head, tofill): # COMPLETADO
+        nodo = None
         #ExprPrime ::=   if andExpr else andExpr ExprPrime
         addedError = True
         if self.current_token == "IF":
+            nodo = Node("IFEXPR")
             self.getToken()
-            self.andExpr()
+            head.saveNodo(nodo)
+            if tofill.empty: tofill.start(nodo)
+
+            child0 = self.andExpr()
+            child0.parent = nodo
             if self.current_token == "ELSE":
                 self.getToken()
-                self.andExpr()
-                self.ExprPrime()
+                child1 = self.andExpr()
+                child1.parent = nodo
+                child2 = self.ExprPrime(head, tofill)
+                if child2 != None:
+                    addChildFront(nodo, child2)
+
                 addedError = False
             else: self.add_error(Error("ExprPrime", "ELSE not founded", self.current_token.row))
 
-
         #ExprPrime ::=  ''
         if not addedError and self.current_token not in FOLLOW['ExprPrime']:
+            nodo = self.errorNode()
             self.add_error(Error("ExprPrime","Token inesperado",self.current_token.row))
         while self.current_token not in FOLLOW['ExprPrime'] and self.current_token != "EOF":
             self.getToken()
+        return nodo
 
     def orExpr(self):
         # orExpr ::= andExpr orExprPrime
@@ -703,7 +693,6 @@ class Parser:
             tofill.copyNodo(child1)
             return prime.nodo
         return child1
-
 
     def notExprPrime(self, head, tofill):
         nodo = None

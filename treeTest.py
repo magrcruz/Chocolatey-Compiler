@@ -337,7 +337,6 @@ class TestTree():
         self.parser.getToken()
         root = self.parser.orExpr()
         render_tree(root)
-        
 
     def orExprPrime(self):
         self.parser.TOKEN_INPUT = "OR TRUE NEWLINE".split()
