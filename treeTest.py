@@ -522,31 +522,37 @@ class TestTree():
         │   └── INTEGER
         └── INTEGER
         '''
-        
+               
+
     def TermPrime(self):
+        head, tofill = Place(), Place()
         #TermPrime ::=  ''
         self.parser.TOKEN_INPUT = "NEWLINE".split()
         self.parser.getToken()
-        root = self.parser.TermPrime()
+        root = self.parser.TermPrime(head, tofill)
         print(">> == WORKS EMPTY == <<\n" + str(root == None)+"\n")
 
+        head, tofill = Place(), Place()
         # TermPrime ::= * Factor TermPrime 
-        #self.parser.TOKEN_INPUT = "MUL ID NEWLINE".split()
-        #self.parser.getToken()
-        #root = self.parser.TermPrime()
-        #render_tree(root)
-
-        # TermPrime ::= * Factor TermPrime 
-        self.parser.TOKEN_INPUT = "MUL ID LPAREN INTEGER COMMA INTEGER RPAREN NEWLINE".split()
+        self.parser.TOKEN_INPUT = "MUL ID NEWLINE".split()
         self.parser.getToken()
-        root = self.parser.TermPrime()
-        render_tree(root)
+        root = self.parser.TermPrime(head, tofill)
+        render_tree(head.nodo)
+        print(">> PLACE IS RIGHT? " + str(tofill.name == "TO FILL")+"\n")
 
         # TermPrime ::= * Factor TermPrime 
+        #self.parser.TOKEN_INPUT = "MUL ID LPAREN INTEGER COMMA INTEGER RPAREN NEWLINE".split()
+        #self.parser.getToken()
+        #root = self.parser.TermPrime(head, tofill)
+        #render_tree(head)
+
+        # TermPrime ::= * Factor TermPrime 
+        head, tofill = Place(), Place()
         self.parser.TOKEN_INPUT = "MUL ID MOD ID NEWLINE".split()
         self.parser.getToken()
-        root = self.parser.TermPrime()
-        render_tree(root)
+        root = self.parser.TermPrime(head, tofill)
+        render_tree(head.nodo)
+        print(">> PLACE IS RIGHT? " + str(tofill.name == "TO FILL")+"\n")
         '''EXPECTED OUTPUT
         First it needs to perform the mul then the mod
         MOD
@@ -554,11 +560,12 @@ class TestTree():
         │   └── ID
         └── ID
         '''
-
+        head, tofill = Place(), Place()
         self.parser.TOKEN_INPUT = "MUL ID MOD ID DIV ID NEWLINE".split()
         self.parser.getToken()
-        root = self.parser.TermPrime()
-        render_tree(root)
+        root = self.parser.TermPrime(head, tofill)
+        render_tree(head.nodo)
+        print(">> PLACE IS RIGHT? " + str(tofill.name == "TO FILL")+"\n")
         '''EXPECTED OUTPUT
         DIV
         ├── MOD
@@ -567,11 +574,12 @@ class TestTree():
         │   └── ID
         └── ID
         '''
-
+        head, tofill = Place(), Place()
         self.parser.TOKEN_INPUT = "MUL ID MOD ID DIV ID MOD ID NEWLINE".split()
         self.parser.getToken()
-        root = self.parser.TermPrime()
-        render_tree(root)
+        root = self.parser.TermPrime(head, tofill)
+        render_tree(head.nodo)
+        print(">> PLACE IS RIGHT? " + str(tofill.name == "TO FILL")+"\n")
         '''EXPECTED OUTPUT
         MOD
         ├── DIV
@@ -742,4 +750,4 @@ class TestTree():
 
 
 testTree = TestTree()
-testTree.orExpr()
+testTree.TermPrime()

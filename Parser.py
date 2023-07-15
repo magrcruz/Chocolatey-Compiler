@@ -1,19 +1,52 @@
 from Scanner import *
 from utils.Error import *
 from utils.FirstAndFollows import *
+from utils.Place import Place
 from anytree import Node, RenderTree
 from anytree.exporter import DotExporter
 from anytree.search import findall
 
-DEBUG = False
-global TOKEN_INPUT
-TOKEN_INPUT = ["ID", ":=", "INT_NUM", "SUB", "INT_NUM", "SUB",  "ID", "EOF"]
+DEBUG = True
 
 def render_tree(root: object) -> None:
     print(">> ===== ARBOL ===== <<")
     for pre, fill, node in RenderTree(root):
         print("%s%s" % (pre, node.name))
     print("")
+
+def addChildFront(child,parent):
+    parent.children = list([child]) + list(parent.children)
+
+def goDownLeft(nodo):
+    temp1, temp2 = nodo, None
+    while temp1!=None:
+        #print("esta en ", temp1)
+        temp2 = temp1
+        temp1 = list(temp1.children)
+        if len(temp1):
+            if not hasattr(temp1[0],"left"):#Ver si existe o bota true
+                temp1 = temp1[0]
+                continue
+            elif (hasattr(temp1[0],"left") and temp1[0].left):#tiene que bajar uno mas
+                temp2 = temp1[0]
+        temp1 = None
+    return temp2
+
+def arrangePriority(parent, child):
+    #Verifica si tiene que hacer el cambio y que el posible padre tenga a su hijo correcto
+    if parent != None:
+        sibling = goDownLeft(parent)
+        #print("El sibling es: ", sibling.name)
+        #print("El padre es ", sibling.parent)
+        if sibling.parent:
+            if (sibling.name in LEVELS and sibling.parent.name in LEVELS
+                and (LEVELS[sibling.name] >= LEVELS[sibling.parent.name])):
+                addChildFront(child,sibling)
+            else:
+                addChildFront(child,sibling.parent)
+        else: addChildFront(child,sibling)
+        return parent
+    return child
 
 class Parser:
     def __init__(self, escaner):
@@ -575,7 +608,7 @@ class Parser:
         self.ExprPrime()
         return nodo
 
-    def ExprPrime(self):
+    def ExprPrime(self): # COMPLETADO
         #ExprPrime ::=   if andExpr else andExpr ExprPrime
         addedError = True
         if self.current_token == "IF":
@@ -595,82 +628,109 @@ class Parser:
         while self.current_token not in FOLLOW['ExprPrime'] and self.current_token != "EOF":
             self.getToken()
 
-    def orExpr(self):
+    def orExpr(self): # COMPLETADO
         # orExpr ::= andExpr orExprPrime
-        self.andExpr()
-        self.orExprPrime()
+        child = self.andExpr()
+        parent = self.orExprPrime()
+        return arrangePriority(parent,child)
 
-    def orExprPrime(self):
+    def orExprPrime(self): # COMPLETADO
+        nodo = None
         # orExprPrime ::= or andExpr orExprPrime
         if self.current_token == "OR":
+            nodo = Node("OR")
             self.getToken()
-            self.andExpr()
-            self.orExprPrime()
+            child1 = self.andExpr()
+            if (child1.name in ["MUL", "DIV", "MOD","ADD","SUB", "NOT","AND"]
+                or child1.name in FIRST['CompOp']):
+                child1.left = False
+            child1.parent = nodo
+            child2 = self.orExprPrime()
+            return arrangePriority(child2,nodo)
 
         #orExprPrime ::= epsilon
         if self.current_token not in FOLLOW["OrExprPrime"]:
+            nodo = self.errorNode()
             self.add_error(Error("OrExprPrime", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['OrExprPrime'] and self.current_token != "EOF":
                 self.getToken()
+        return nodo
 
-    def andExpr(self):
+    def andExpr(self): # COMPLETADO
         #andExpr ::= notExpr andExprPrime
-        self.notExpr()
-        self.andExprPrime()
+        child = self.notExpr()
+        #print("notExpr")
+        #render_tree(child)
+        parent = self.andExprPrime()
+        #print("andExprPrime")
+        #render_tree(parent)
+        return arrangePriority(parent,child)
 
-    def andExprPrime(self):
+    def andExprPrime(self): # COMPLETADO
         #andExprPrime ::=   and notExpr andExprPrime
+        nodo = None
         if self.current_token == "AND":
+            nodo = Node("AND")
             self.getToken()
-            self.notExpr()
-            self.andExprPrime()
+            child1 = self.notExpr()
+            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB", "NOT"] or child1.name in FIRST['CompOp']:
+                child1.left = False
+            child2 = self.andExprPrime()
+            child1.parent = nodo
+            return arrangePriority(child2,nodo)
 
         #andExprPrime ::=  ''
         if self.current_token not in FOLLOW["AndExprPrime"]:
+            nodo = self.errorNode()
             self.add_error(Error("AndExprPrime", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['AndExprPrime'] and self.current_token != "EOF":
                 self.getToken()
-
+        return nodo
+    
     def notExpr(self):
         # notExpr ::= CompExpr notExprPrime
-        self.CompExpr()
-        self.notExprPrime()
+        child = self.CompExpr()
+        parent = self.notExprPrime()
+        return arrangePriority(parent,child)
+
 
     def notExprPrime(self):
+        nodo = None
         # notExprPrime ::= not CompExpr notExprPrime
         if self.current_token == "NOT":
+            nodo = Node("NOT")
             self.getToken()
-            self.CompExpr()
-            self.notExprPrime()
+            child1 = self.CompExpr()
+            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"] or child1.name in FIRST['CompOp']:
+                child1.left = False
+            child1.parent = nodo
+            child2 = self.notExprPrime()
+            return arrangePriority(child2,nodo)
 
         #notExprPrime ::= epsilon
         if self.current_token not in FOLLOW["NotExprPrime"]:
+            nodo = self.errorNode()
             self.add_error(Error("NotExprPrime", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['NotExprPrime'] and self.current_token != "EOF":
                 self.getToken()
-
-    def CompExpr(self):
-        #CompExpr ::=  IntExpr CompExprPrime
-        nodo = None
-        child = self.IntExpr()
-        parent = self.CompExprPrime()
-        if parent != None:
-            child.parent = parent
-            nodo = parent
-        else:
-            nodo = child
         return nodo
 
-    def CompExprPrime(self):
+    def CompExpr(self): # COMPLETADO
+        #CompExpr ::=  IntExpr CompExprPrime
+        child = self.IntExpr()
+        parent = self.CompExprPrime()
+        return arrangePriority(parent,child)
+
+    def CompExprPrime(self): #
         nodo = None
         #CompExprPrime ::=   CompOp IntExpr CompExprPrime
         if self.current_token in FIRST['CompOp']:
             nodo = self.CompOp()
             child1 = self.IntExpr()
+            if child1.name in ["MUL", "DIV", "MOD","ADD","SUB"]: child1.left = False
             child2 = self.CompExprPrime()
             child1.parent = nodo
-            if child2!=None:
-                child2.parent = nodo
+            return arrangePriority(child2,nodo)
 
         # CompExprPrime ::=  ''
         if self.current_token not in FOLLOW["CompExprPrime"]:
@@ -682,15 +742,15 @@ class Parser:
 
     def IntExpr(self):
         # IntExpr ::= Term IntExprPrime
-        nodo = Node("")
+        nodo = None
         child = self.Term()
-        child2 = self.IntExprPrime()
-        if child2!=None: 
-            nodo.name = child2.name
-            childs = []
-            child.parent = nodo
-            for c in child2.children: childs.append(c)
-            for c in childs: c.parent = nodo
+        #child.left = False
+        parent = self.IntExprPrime()
+        if parent != None:
+            sibling = goDownLeft(parent)
+            if sibling.parent: addChildFront(child,sibling.parent)
+            else: addChildFront(child,sibling)
+            nodo = parent
         else: nodo = child
         return nodo
 
@@ -701,11 +761,15 @@ class Parser:
             nodo = Node(self.current_token.value)
             self.getToken()
             child = self.Term()
-            child2 = self.IntExprPrime()
+            #buscar si alguno de sus hijos es de menor rango y poner como left False
+            if child.name in ["MUL", "DIV", "MOD"]: child.left = False
             child.parent = nodo
-
-            if child2!=None:
-                child2.parent = nodo
+            child2 = self.IntExprPrime()
+            if child2 != None:
+                aux = goDownLeft(child2)
+                if aux.parent: addChildFront(nodo, aux.parent)
+                else: addChildFront(nodo, child2)
+                nodo = child2
 
         #IntExprPrime ::= epsilon
         if self.current_token not in FOLLOW["IntExprPrime"]:
@@ -719,16 +783,38 @@ class Parser:
         #Term ::=  Factor TermPrime
         nodo = Node("")
         child1 = self.Factor()
-        parent = self.TermPrime()
+        parent = self.TermPrime()#Si esto sucede debe agregar el hijo al nivel mas bajo a la izquierda
         if parent != None:
-            child1.parent = nodo
-            nodo.name = parent.name
-            for i,c in enumerate(parent.children):
-                c.parent = nodo
+            sibling = goDownLeft(parent)
+            if sibling.parent: addChildFront(child1,sibling.parent)
+            else: addChildFront(child1,sibling)
+            nodo = parent
         else: nodo = child1
         return nodo
     
-    def TermPrime(self): # COMPLETADO
+    '''
+    def TermPrime(self, place): # COMPLETADO
+        nodo = None
+        #TermPrime ::=   *|//|% Factor TermPrime
+        if self.current_token in ["MUL", "DIV", "MOD"]:
+            nodo = Node(self.current_token.value)
+            self.getToken()
+            if place.empty: place.start(nodo)
+            der = self.Factor()
+            der.parent = nodo
+            prime = self.TermPrime(place)
+            if prime: nodo.parent = prime
+                
+        #TermPrime ::=  ε
+        if self.current_token not in FOLLOW["TermPrime"]:
+            nodo = self.errorNode()
+            self.add_error(Error("TermPrime", "Token inesperado", self.current_token.row))
+            while self.current_token not in FOLLOW['TermPrime'] and self.current_token != "EOF":
+                self.getToken()
+        return nodo
+    '''
+    '''
+    def TermPrime(self, place): # COMPLETADO
         nodo = None
         #TermPrime ::=   *|//|% Factor TermPrime
         if self.current_token in ["MUL", "DIV", "MOD"]:
@@ -738,8 +824,27 @@ class Parser:
             child.parent = nodo
             child2 = self.TermPrime()
             if child2 != None:
-                child2.parent = nodo
 
+                aux = goDownLeft(child2)
+                if aux.parent: addChildFront(nodo, aux.parent)
+                else: addChildFront(nodo, child2)
+                nodo = child2
+'''
+
+    def TermPrime(self,head,tofill):
+        nodo = None
+        #TermPrime ::=   *|//|% Factor TermPrime
+        if self.current_token in ["MUL", "DIV", "MOD"]:
+            nodo = Node(self.current_token.value)
+            head.saveNodo(nodo)
+            self.getToken()
+            if tofill.empty: tofill.start(nodo)
+            child1 = self.Factor()
+            child1.parent = nodo
+            child2 = self.TermPrime(head,tofill)
+            if child2 != None:
+                addChildFront(nodo, child2)
+            
         #TermPrime ::=  ε
         if self.current_token not in FOLLOW["TermPrime"]:
             nodo = self.errorNode()
@@ -747,7 +852,9 @@ class Parser:
             while self.current_token not in FOLLOW['TermPrime'] and self.current_token != "EOF":
                 self.getToken()
         return nodo
-    
+            
+
+
     def Factor(self):  # COMPLETADO
         addError = True
         nodo = None
@@ -781,9 +888,10 @@ class Parser:
             if self.current_token == "RPAREN":
                 self.getToken()
                 addError = False
-
-        if addError: 
+        
+        else:
             nodo = self.errorNode()#
+
         if addError or self.current_token not in FOLLOW["Factor"]:
             self.add_error(Error("Factor", "Token inesperado", self.current_token.row))
             while self.current_token not in FOLLOW['Factor'] and self.current_token != "EOF":
@@ -835,7 +943,6 @@ class Parser:
         nodo = None
         if self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]:
             nodo = Node(self.current_token.value)
-            print(nodo)
             self.getToken()
 
         if self.current_token not in FOLLOW["Literal"]:
