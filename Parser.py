@@ -173,11 +173,13 @@ class Parser:
     def Def(self):
         #Def ::=  def ID ( TypedVarList ) Return : NEWLINE Block
         # Verifica hasta los dos puntos
+        nodo = self.errorNode()
         if self.current_token == "DEF":
-            nodo = Node("Def")
+            #nodo = Node("Def")
             self.getToken()
             if self.current_token == "ID":
-                Node(self.current_token.value, parent=nodo)
+                #Node(self.current_token.value, parent=nodo)
+                nodo = Node(self.current_token.value)
                 self.getToken()
                 if self.current_token == "LPAREN":
                     self.getToken()
