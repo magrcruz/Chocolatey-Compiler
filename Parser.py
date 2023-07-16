@@ -58,37 +58,44 @@ class Parser:
     #    error.descripcion += ", found %s" % self.current_token.value
     #    self.error_list.append(error)
     def synchronize(self):
-        while self.current_token != "NEWLINE" or self.current_token != "EOF":
+        while not(self.current_token == "NEWLINE" or self.current_token == "EOF"):
+            print("you here")
             self.getToken()
+        print("You out")
         
 
     def quickError(self, production, expected = None):
         if self.current_error != None: return
         if expected != None:
-            self.current_error = Error(production, "%s expected but %s founded instead"%(expected,self.current_token.value), self.current_token.row, self.current_token.col)
+            self.current_error = Error(production, "%s expected but [ %s ] founded instead"%(expected,self.current_token.value), self.current_token.row, self.current_token.col)
         else:
             self.current_error = Error(production,"Token unexpected %s" %self.current_token.value, self.current_token.row, self.current_token.col)
-    
+        print(self.current_error)
+        print("Here") 
+
     def S(self):
         #print("INFO PARSE - Start scanning...")
 
         self.abstract_syntax_tree = self.Program()
         if self.current_token != "EOF":
-            self.add_error("Se encontraron tokens no esperados")
+            self.quickError("S","EOF")
+        
+        self.escaner.buffer = []#Vacia el buffer para hacer la sincronizacion
+        #Agrega si aun quedase algun error
+        if self.current_error:
+            self.error_list.append(self.current_error)
+            self.current_error = None
 
         #Errores
         print("INFO SCAN - Completed with %i errors" % (len(self.escaner.errores)))
-        if len(self.escaner.errores):
-            for i in self.escaner.errores:
-                print("Error:  %s " % i)
+        for i in self.escaner.errores:
+            print("Error:  %s " % i)
 
         print("INFO PARSE - Completed with %i errors" % (len(self.error_list)))
-        if len(self.error_list):
-            for i in self.error_list:
-                print("Error:  %s " % i)
-            return False
+        for i in self.error_list:
+            print("Error:  %s " % i)
         
-        elif not len(self.escaner.errores): #Si no hubo errores en el escaner ni en el parser
+        if not len(self.escaner.errores) and not len(self.error_list): #Si no hubo errores en el escaner ni en el parser
             render_tree(self.abstract_syntax_tree)
             return True
         
@@ -96,20 +103,53 @@ class Parser:
 
     def Program(self):
         self.getToken()
+
         #Program ::= DefList StatementList
         nodo = Node("Program")
         child1 = self.DefList()
         if child1!=None:
             child1.parent = nodo
+
+            #Sincronizar
+            if self.current_token not in FOLLOW["DefList"]:
+                self.quickError("Deflist")
+                while self.current_token not in FOLLOW["DefList"]:
+                    self.getToken()
+            #Agrega el error si lo hubiera
+            if self.current_error:
+                nodo = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None          
+
         child2 = self.StatementList()
         if child2!=None:
             child2.parent = nodo
+
+            #Sincronizar
+            if self.current_token not in FOLLOW["StatementList"]:
+                self.quickError("StatementList")
+                while self.current_token not in FOLLOW["StatementList"]:
+                    self.getToken()
+            #Agrega el error si lo hubiera
+            if self.current_error:
+                nodo = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None 
+
+        #Sincronizar
+        if self.current_token not in FOLLOW["Program"]:
+            self.quickError("Program")
+            while self.current_token not in FOLLOW["Program"]:
+                self.getToken()
+        #Agrega el error si lo hubiera
+        if self.current_error:
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
         return nodo
 
     def DefList(self):
-        nodo = None
         #DefList ::=  Def DefList
-        
         if self.current_token in FIRST['Def']:
             child1 = self.Def()
             if child1!=None:
@@ -120,21 +160,18 @@ class Parser:
                     for i,c in enumerate(childs.children):
                         c.parent = nodo
                         setattr(c, "order", i+1)
-  
+                return nodo
+            return child1#
+            
         #DefList ::=  ''
-        elif self.current_token not in FOLLOW['DefList']:
-            #En este caso esta bien ya que si hay un arror despues de la funcion corresponde a statement list
-            self.add_error(Error("DefList", "Follow(DefList) not founded", self.current_token.row))
-            while self.current_token not in FOLLOW['DefList'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-            if self.current_token == "NEWLINE" : self.getToken()
-            nodo = self.errorNode()
-        return nodo
+        elif self.current_token in FOLLOW["DefList"]:
+            return None
+        
+        self.quickError("DefList","def")
+        return self.errorNode()
         
     def Def(self):
-        nodo = None
         #Def ::=  def ID ( TypedVarList ) Return : NEWLINE Block
-        addedError = True
         # Verifica hasta los dos puntos
         if self.current_token == "DEF":
             nodo = Node("Def")
@@ -152,80 +189,81 @@ class Parser:
                         if child2 != None: child2.parent = nodo
                         if self.current_token == "COLON":
                             self.getToken()
-                            if self.current_token == "NEWLINE":
-                                self.getToken()
-                                child3 = self.Block()
-                                child3.parent = nodo
-                                addedError = False
-                            else: self.add_error(Error("DEF", "NEWLINE not founded", self.current_token.row))
-                        else: self.add_error(Error("DEF", "COLON not founded", self.current_token.row))
-                    else: self.add_error(Error("DEF", "RPAREN not founded", self.current_token.row))
-                else: self.add_error(Error("DEF", "LPAREN not founded", self.current_token.row))
-            else: self.add_error(Error("DEF", "<ID> not founded", self.current_token.row))
-        else: self.add_error(Error("DEF", "DEF not founded", self.current_token.row))
+                        else: self.quickError("Def",":")
+                    else: self.quickError("Def",")")
+                else: self.quickError("Def","(")
+            else: self.quickError("Def","ID")
+        else: self.quickError("Def","def")
 
-        if addedError: nodo = self.errorNode()
-        # Si encontro algun error sincroniza con los follow
-        if self.current_token not in FOLLOW['Def'] and not addedError:
-            #Si no esta en los follow pero aun no anadio algun error
-            self.add_error(Error("DEF", "Token inesperado", self.current_token.row))
-        while self.current_token not in FOLLOW['Def'] and self.current_token not in ["EOF","NEWLINE"]:
+        if self.current_token != "NEWLINE":
+            self.quickError("Def","NEWLINE")
+
+        self.synchronize()
+        if self.current_error:
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
+
+        #Aqui continua leyendo Block
+        if self.current_token == "NEWLINE":
             self.getToken()
-        if self.current_token == "NEWLINE" : self.getToken()##
+
+        child3 = self.Block()
+        child3.parent = nodo
+
+        #Sincroniza con los follow
+        if self.current_token not in FOLLOW['Def']:
+            self.quickError("Def")
+            nodo = self.errorNode()
+            while self.current_token not in FOLLOW['Def']:
+                self.getToken()
+
         return nodo
     
     def TypedVar(self):
         # TypeVar ::= ID : Type
-        addError = True
-        nodo = None
         if self.current_token=="ID":
             nodo = Node(":")
             Node(self.current_token.value, parent=nodo)
             self.getToken()
-            if self.current_token == "COLON":
+
+            if self.current_token != "COLON":
+                self.quickError("TypedVar",":")
+            else:
                 self.getToken()
                 child2 = self.Type()
                 child2.parent = nodo
-                addError = False
 
-        # Si encontro algun error sincroniza con los follow
-        if addError: nodo = self.errorNode()
-        if self.current_token not in FOLLOW['TypedVar'] and self.current_token != "NEWLINE" or addError:
-            self.add_error(Error("TypedVar", "Token inesperado", self.current_token.row))
-        while self.current_token not in FOLLOW['TypedVar'] and self.current_token not in ["EOF","NEWLINE"]:
-            self.getToken()
+            return nodo
+
+        #No deberia llegar aqui porque solo se llama cuando self.currentToken es ID
+        self.quickError("TypedVar","ID")
         return nodo
 
     def Type(self):
-        addError = True
-        nodo = None
         # Type ::= int
         if self.current_token=="INT" or self.current_token=="STR":
             nodo = Node(self.current_token.value)
             self.getToken()
-            addError = False
+            return nodo
 
         # Type ::= [ Type ]
         elif self.current_token == "LBRACKET":
             self.getToken()
             nodo = self.Type()
-            if self.current_token == "RBRACKET":
-                addError = False
+            if self.current_token != "RBRACKET":
+                self.quickError("Type","]")
+            else:
                 self.getToken()
-                nodo.name = "[{}]".format(nodo.name)
+            nodo.name = "[{}]".format(nodo.name)
+            return nodo
 
-        # Sincronizacion de errores
-        if addError: nodo = self.errorNode()
-        if self.current_token not in FOLLOW["Type"] and self.current_token != "NEWLINE" or addError:
-            self.add_error(Error("Type", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Type'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-        return nodo
+        self.quickError("Type","int | str | [")
+        return self.errorNode()
 
     def TypedVarList(self):
-        nodo = None
         #TypedVarList ::=  TypedVar TypedVarListTail
-        if self.current_token in FIRST['TypedVarList']: #ID
+        if self.current_token in FIRST['TypedVar']: #ID
             nodo = Node("()")
             child1 = self.TypedVar()
             child1.parent = nodo
@@ -236,17 +274,16 @@ class Parser:
                 for i, c in enumerate(childrens):
                     c.parent = nodo
                     setattr(c, "order", i+1)
-
+            return nodo
+        
         #TypedVarList ::=  ''
-        if self.current_token not in FOLLOW['TypedVarList'] and self.current_token != "NEWLINE":
-            self.add_error(Error("TypedVarList", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['TypedVarList'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-            nodo =  self.errorNode()
-        return nodo
+        elif self.current_token in FOLLOW['TypedVarList']:
+            return None
+
+        self.quickError("TypedVarList","ID")
+        return self.errorNode()
 
     def TypedVarListTail(self):
-        nodo = None
         #TypedVarListTail ::=  , TypedVar TypedVarListTail
         if self.current_token == "COMMA":
             nodo = Node("TAIL")
@@ -256,54 +293,48 @@ class Parser:
             child2 = self.TypedVarListTail()
             if child2 != None:#Puede ser vacio
                 child2.parent = nodo
+            return nodo
 
         #TypedVarListTail ::=  ''
-        if self.current_token not in FOLLOW['TypedVarListTail'] and self.current_token != "NEWLINE":
-            self.add_error(Error("TypedVarListTail", "Token inesperado", self.current_token.row))
-            nodo = self.errorNode()
-            while self.current_token not in FOLLOW['TypedVarListTail'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW['TypedVarListTail']:
+            return None
+        
+        self.quickError("TypedVarListTail",",")
+        return self.errorNode()
     
     def Return(self):
-        nodo = None
-        addError = True
         #Return ::= -> Type
         if self.current_token == "ARROW":
             nodo = Node("->")
             self.getToken()
             child1 = self.Type()
             child1.parent = nodo
-            addError = False
+            return nodo
         
-        if self.current_token in FOLLOW['Return']:
-            addError = False
+        elif self.current_token in FOLLOW['Return']:
+            return None
 
-        if addError : nodo = self.errorNode()
-
-        #Return ::= epsilon
-        if self.current_token not in FOLLOW['Return'] and self.current_token != "NEWLINE":
-            self.add_error(Error("Return", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Return'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-        return nodo
+        self.quickError("Return","->")
+        return self.errorNode()
 
     def Block(self):
         nodo = Node("DO")
         #Block ::= IDENT Statement StatementList DEDENT
-        addError = True
 
         if self.current_token == "IDENT":
             self.getToken()
-            child1 = self.Statement()
+            child1 = self.Statement() # Statement ya esta sincronizado
             child1.parent = nodo
             childs = self.StatementList()
             if childs != None:
                 for i,c in enumerate(childs.children):
                     c.parent = nodo##
-            if self.current_token == "DEDENT":
-                self.getToken()
-                addError = False
+            
+            if self.current_token != "DEDENT":
+                #Si no hay dedent solo se olvido de ponerlo y como ya esta sincronizado en statement no habria tanto problema
+                self.quickError("Block","DEDENT")
+                print("Capaz no sincronizo bien el statement")
+            else: self.getToken()
 
         else:
             self.quickError("Block", "IDENT")
@@ -311,8 +342,13 @@ class Parser:
         # Sincronizacion de errores
         if self.current_token not in FOLLOW["Block"]:
             self.quickError("Block")
+            while self.current_token not in FOLLOW["Block"]:
+                self.getToken()
 
-        #Sincronizar bloque 
+        if self.current_error:#Agrega el error si aun no lo agrego
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
 
         return nodo
 
@@ -474,6 +510,14 @@ class Parser:
             nodo = self.errorNode()
             while self.current_token not in FOLLOW['Statement']:#Incluye dedent y eof
                 self.getToken()
+
+        #Si falto agregar algun error lo guarda
+        if self.current_error:
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
+
+        print("Chequea el estado")
         return nodo
 
     def ElifList(self):
@@ -921,7 +965,7 @@ class Parser:
             return self.List() #Lista ve por sus propios errores
 
         #NameTail ::=  ε # FOLLOWS
-        elif self.current_token not in FOLLOW["NameTail"]:
+        elif self.current_token in FOLLOW["NameTail"]:
             return None
         
         self.quickError("NameTail")
