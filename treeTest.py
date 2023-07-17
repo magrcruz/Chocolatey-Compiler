@@ -1,3 +1,7 @@
+# OUTDATED
+# Para hacerlo funcionar en la funciones *Prime necesita agregar los nuevos parametros de lugar
+# Archivo clave para verificar la elaboracion del arbol
+
 from Parser import *
 from anytree import PreOrderIter
 

@@ -213,9 +213,9 @@ class Scanner:
 
             if espacios: # Quedaron espacios sueltos
                 self.errores.append(self.createError("IDENT", "Error de identacion"))
-            dif = tabs - self.ident               #     Bug de dedentación
+            dif = tabs - self.ident               
 
-            if tabs or dif != 0:                          #     Bug de dedentación
+            if tabs or dif != 0:                         
                 if dif > 0:
                     self.ident = tabs
                     return Token("IDENT", dif, self.pos[0], self.pos[1])
@@ -243,17 +243,20 @@ class Scanner:
 
             if len(self.buffer) == 0: return self.getTknEOF()
 
+            #Ignora lineas vacias
             while self.ignoreEmptyLine():
                 continue
 
+            # Ignora tokens
             if foundedToken: #Significa que no esta al inicio de la linea
                 self.ignoreUselessChars()
             self.getchar()
 
+            # Salto de linea
             if self.current_char == "\n" and foundedToken:
                 return self.getTknNEWLINE()
 
-            # IDENTATION
+            # Identacion
             token = self.getIdentation()
             if token and token.value > 0:
                 return token
@@ -261,7 +264,7 @@ class Scanner:
                 token = None
                 self.getchar()
 
-            # Esta buscando un id o una palabra reservada
+            # Palabras reservadas  IDs
             if self.current_char.isalpha():
                 self.getIdentifier()
                 if self.lexeme in KEYWORDS:
@@ -269,16 +272,17 @@ class Scanner:
                 else:
                     token = Token( "ID", self.lexeme, self.pos[0], self.pos[1] )
 
-            # Esta buscando un numero
+            # Numeros
             elif self.current_char.isdigit():
                 isNumber, result = self.getNumber()
                 if isNumber: token = result
                 else: self.errores.append( result )
 
-            # Buscar operadores
+            # Operadores
             elif self.current_char in OPER_DELIMITERS or self.current_char in self.firstOfDblOper:
                 token = self.getTknOper()
 
+            # String
             elif self.current_char == '"':
                 self.getchar()
                 lex = ""

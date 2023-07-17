@@ -1,3 +1,12 @@
+"""
+Trabajo: Compilador (Scanner y Parser LL1)
+Autor: Maria Cruz Caceres
+Fecha de creación: 2023
+
+Descripción: [Breve descripción del archivo]
+
+"""
+
 global foundedToken
 global foundedError
 
