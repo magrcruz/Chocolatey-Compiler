@@ -59,19 +59,16 @@ class Parser:
     #    self.error_list.append(error)
     def synchronize(self):
         while not(self.current_token == "NEWLINE" or self.current_token == "EOF"):
-            print("you here")
             self.getToken()
-        print("You out")
         
-
     def quickError(self, production, expected = None):
         if self.current_error != None: return
+        value = self.current_token.value
+        if value == " ": value = self.current_token.type
         if expected != None:
-            self.current_error = Error(production, "%s expected but [ %s ] founded instead"%(expected,self.current_token.value), self.current_token.row, self.current_token.col)
+            self.current_error = Error(production, "[ %s ] expected but [ %s ] founded instead"%(expected,value), self.current_token.row, self.current_token.col)
         else:
-            self.current_error = Error(production,"Token unexpected %s" %self.current_token.value, self.current_token.row, self.current_token.col)
-        print(self.current_error)
-        print("Here") 
+            self.current_error = Error(production,"Token unexpected [ %s ]" %value, self.current_token.row, self.current_token.col)
 
     def S(self):
         #print("INFO PARSE - Start scanning...")
@@ -333,9 +330,10 @@ class Parser:
                     c.parent = nodo##
             
             if self.current_token != "DEDENT":
-                #Si no hay dedent solo se olvido de ponerlo y como ya esta sincronizado en statement no habria tanto problema
                 self.quickError("Block","DEDENT")
-                print("Capaz no sincronizo bien el statement")
+                #Sincronizacion con dedent antes de newline
+                while self.current_token not in FOLLOW["Block"]:
+                    self.getToken()
             else: self.getToken()
 
         else:
@@ -344,13 +342,13 @@ class Parser:
         # Sincronizacion de errores
         if self.current_token not in FOLLOW["Block"]:
             self.quickError("Block")
-            while self.current_token not in FOLLOW["Block"]:
-                self.getToken()
 
         if self.current_error:#Agrega el error si aun no lo agrego
             nodo = self.errorNode()
             self.error_list.append(self.current_error)
             self.current_error = None
+            while self.current_token not in FOLLOW["Block"]:#
+                self.getToken()
 
         return nodo
 
@@ -428,7 +426,7 @@ class Parser:
                 child2 = self.ElifList()
                 if child2!=None:
                     for _,c in enumerate(child2.children):
-                        c.parent = nodo
+                        c.parent = nodo ##
 
             child2 = None
             if self.current_token in FIRST["Else"]:
@@ -519,7 +517,6 @@ class Parser:
             self.error_list.append(self.current_error)
             self.current_error = None
 
-        print("Chequea el estado")
         return nodo
 
     def ElifList(self):
@@ -569,13 +566,14 @@ class Parser:
                 nodo = Node("ELIF")
                 child1.parent = nodo
                 child2.parent = nodo
-
+    
         elif self.current_token in FOLLOW['Elif']:
             nodo = None
         else: #Con la modificacion no deberia entrar aqui
             #Cuando no esta vacio pero se intento poner la produccion, se sincroniza en Statement
             self.quickError("Elif","elif")
             nodo = self.errorNode()
+            
         return nodo
 
     def Else(self): #SYNCHRONIZE
