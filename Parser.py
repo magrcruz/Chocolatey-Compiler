@@ -970,6 +970,8 @@ class Parser:
     def Literal(self):
         if self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]:
             nodo = Node(self.current_token.value)
+            if self.current_token.type == "STRING":
+                nodo.name = '"%s"' % nodo.name
             self.getToken()
             return nodo
         #Nunca deberia entrar aqui porque solo se llama si self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]
