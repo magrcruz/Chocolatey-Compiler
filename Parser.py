@@ -23,7 +23,7 @@ class Parser:
         self.error_list = []
         self.abstract_syntax_tree = None
         self.current_token = None
-
+        self.current_error = None
         self.TOKEN_INPUT = []
 
     #TREE
@@ -53,35 +53,42 @@ class Parser:
             else:
                 self.current_token = Token("EOF","EOF",0,0)
 
-    def to_NewLine(self): #R
-        while self.current_token != "NEWLINE" :
+    def synchronize(self):
+        while not(self.current_token == "NEWLINE" or self.current_token == "EOF"):
             self.getToken()
-
-    def add_error(self, error):
-        error.col = self.current_token.col
-        error.descripcion += ", found %s" % self.current_token.value
-        self.error_list.append(error)
+        
+    def quickError(self, production, expected = None):
+        if self.current_error != None: return
+        value = self.current_token.value
+        if value == " ": value = self.current_token.type
+        if expected != None:
+            self.current_error = Error(production, "[ %s ] expected but [ %s ] founded instead"%(expected,value), self.current_token.row, self.current_token.col)
+        else:
+            self.current_error = Error(production,"Token unexpected [ %s ]" %value, self.current_token.row, self.current_token.col)
 
     def S(self):
         #print("INFO PARSE - Start scanning...")
 
         self.abstract_syntax_tree = self.Program()
         if self.current_token != "EOF":
-            self.add_error("Se encontraron tokens no esperados")
+            self.quickError("S","EOF")
+        
+        self.escaner.buffer = []#Vacia el buffer para hacer la sincronizacion
+        #Agrega si aun quedase algun error
+        if self.current_error:
+            self.error_list.append(self.current_error)
+            self.current_error = None
 
         #Errores
         print("INFO SCAN - Completed with %i errors" % (len(self.escaner.errores)))
-        if len(self.escaner.errores):
-            for i in self.escaner.errores:
-                print("Error:  %s " % i)
+        for i in self.escaner.errores:
+            print("Error:  %s " % i)
 
         print("INFO PARSE - Completed with %i errors" % (len(self.error_list)))
-        if len(self.error_list):
-            for i in self.error_list:
-                print("Error:  %s " % i)
-            return False
+        for i in self.error_list:
+            print("Error:  %s " % i)
         
-        elif not len(self.escaner.errores): #Si no hubo errores en el escaner ni en el parser
+        if not len(self.escaner.errores) and not len(self.error_list): #Si no hubo errores en el escaner ni en el parser
             render_tree(self.abstract_syntax_tree)
             return True
         
@@ -89,20 +96,53 @@ class Parser:
 
     def Program(self):
         self.getToken()
+
         #Program ::= DefList StatementList
         nodo = Node("Program")
         child1 = self.DefList()
         if child1!=None:
             child1.parent = nodo
+
+            #Sincronizar
+            if self.current_token not in FOLLOW["DefList"]:
+                self.quickError("Deflist")
+                while self.current_token not in FOLLOW["DefList"]:
+                    self.getToken()
+            #Agrega el error si lo hubiera
+            if self.current_error:
+                nodo = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None          
+
         child2 = self.StatementList()
         if child2!=None:
             child2.parent = nodo
+
+            #Sincronizar
+            if self.current_token not in FOLLOW["StatementList"]:
+                self.quickError("StatementList")
+                while self.current_token not in FOLLOW["StatementList"]:
+                    self.getToken()
+            #Agrega el error si lo hubiera
+            if self.current_error:
+                nodo = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None 
+
+        #Sincronizar
+        if self.current_token not in FOLLOW["Program"]:
+            self.quickError("Program")
+            while self.current_token not in FOLLOW["Program"]:
+                self.getToken()
+        #Agrega el error si lo hubiera
+        if self.current_error:
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
         return nodo
 
     def DefList(self):
-        nodo = None
         #DefList ::=  Def DefList
-        
         if self.current_token in FIRST['Def']:
             child1 = self.Def()
             if child1!=None:
@@ -113,27 +153,26 @@ class Parser:
                     for i,c in enumerate(childs.children):
                         c.parent = nodo
                         setattr(c, "order", i+1)
-  
+                return nodo
+            return child1#
+            
         #DefList ::=  ''
-        elif self.current_token not in FOLLOW['DefList']:
-            #En este caso esta bien ya que si hay un arror despues de la funcion corresponde a statement list
-            self.add_error(Error("DefList", "Follow(DefList) not founded", self.current_token.row))
-            while self.current_token not in FOLLOW['DefList'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-            if self.current_token == "NEWLINE" : self.getToken()
-            nodo = self.errorNode()
-        return nodo
+        elif self.current_token in FOLLOW["DefList"]:
+            return None
+        
+        self.quickError("DefList","def")
+        return self.errorNode()
         
     def Def(self):
-        nodo = None
         #Def ::=  def ID ( TypedVarList ) Return : NEWLINE Block
-        addedError = True
         # Verifica hasta los dos puntos
+        nodo = self.errorNode()
         if self.current_token == "DEF":
-            nodo = Node("Def")
+            #nodo = Node("Def")
             self.getToken()
             if self.current_token == "ID":
-                Node(self.current_token.value, parent=nodo)
+                #Node(self.current_token.value, parent=nodo)
+                nodo = Node(self.current_token.value)
                 self.getToken()
                 if self.current_token == "LPAREN":
                     self.getToken()
@@ -145,80 +184,81 @@ class Parser:
                         if child2 != None: child2.parent = nodo
                         if self.current_token == "COLON":
                             self.getToken()
-                            if self.current_token == "NEWLINE":
-                                self.getToken()
-                                child3 = self.Block()
-                                child3.parent = nodo
-                                addedError = False
-                            else: self.add_error(Error("DEF", "NEWLINE not founded", self.current_token.row))
-                        else: self.add_error(Error("DEF", "COLON not founded", self.current_token.row))
-                    else: self.add_error(Error("DEF", "RPAREN not founded", self.current_token.row))
-                else: self.add_error(Error("DEF", "LPAREN not founded", self.current_token.row))
-            else: self.add_error(Error("DEF", "<ID> not founded", self.current_token.row))
-        else: self.add_error(Error("DEF", "DEF not founded", self.current_token.row))
+                        else: self.quickError("Def",":")
+                    else: self.quickError("Def",")")
+                else: self.quickError("Def","(")
+            else: self.quickError("Def","ID")
+        else: self.quickError("Def","def")
 
-        if addedError: nodo = self.errorNode()
-        # Si encontro algun error sincroniza con los follow
-        if self.current_token not in FOLLOW['Def'] and not addedError:
-            #Si no esta en los follow pero aun no anadio algun error
-            self.add_error(Error("DEF", "Token inesperado", self.current_token.row))
-        while self.current_token not in FOLLOW['Def'] and self.current_token not in ["EOF","NEWLINE"]:
+        if self.current_token != "NEWLINE":
+            self.quickError("Def","NEWLINE")
+
+        self.synchronize()
+        if self.current_error:
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
+
+        #Aqui continua leyendo Block
+        if self.current_token == "NEWLINE":
             self.getToken()
-        if self.current_token == "NEWLINE" : self.getToken()##
+
+        child3 = self.Block()
+        child3.parent = nodo
+
+        #Sincroniza con los follow
+        if self.current_token not in FOLLOW['Def']:
+            self.quickError("Def")
+            nodo = self.errorNode()
+            while self.current_token not in FOLLOW['Def']:
+                self.getToken()
+
         return nodo
     
     def TypedVar(self):
         # TypeVar ::= ID : Type
-        addError = True
-        nodo = None
         if self.current_token=="ID":
             nodo = Node(":")
             Node(self.current_token.value, parent=nodo)
             self.getToken()
-            if self.current_token == "COLON":
+
+            if self.current_token != "COLON":
+                self.quickError("TypedVar",":")
+            else:
                 self.getToken()
                 child2 = self.Type()
                 child2.parent = nodo
-                addError = False
 
-        # Si encontro algun error sincroniza con los follow
-        if addError: nodo = self.errorNode()
-        if self.current_token not in FOLLOW['TypedVar'] and self.current_token != "NEWLINE" or addError:
-            self.add_error(Error("TypedVar", "Token inesperado", self.current_token.row))
-        while self.current_token not in FOLLOW['TypedVar'] and self.current_token not in ["EOF","NEWLINE"]:
-            self.getToken()
+            return nodo
+
+        #No deberia llegar aqui porque solo se llama cuando self.currentToken es ID
+        self.quickError("TypedVar","ID")
         return nodo
 
     def Type(self):
-        addError = True
-        nodo = None
         # Type ::= int
         if self.current_token=="INT" or self.current_token=="STR":
             nodo = Node(self.current_token.value)
             self.getToken()
-            addError = False
+            return nodo
 
         # Type ::= [ Type ]
         elif self.current_token == "LBRACKET":
             self.getToken()
             nodo = self.Type()
-            if self.current_token == "RBRACKET":
-                addError = False
+            if self.current_token != "RBRACKET":
+                self.quickError("Type","]")
+            else:
                 self.getToken()
-                nodo.name = "[{}]".format(nodo.name)
+            nodo.name = "[{}]".format(nodo.name)
+            return nodo
 
-        # Sincronizacion de errores
-        if addError: nodo = self.errorNode()
-        if self.current_token not in FOLLOW["Type"] and self.current_token != "NEWLINE" or addError:
-            self.add_error(Error("Type", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Type'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-        return nodo
+        self.quickError("Type","int | str | [")
+        return self.errorNode()
 
     def TypedVarList(self):
-        nodo = None
         #TypedVarList ::=  TypedVar TypedVarListTail
-        if self.current_token in FIRST['TypedVarList']: #ID
+        if self.current_token in FIRST['TypedVar']: #ID
             nodo = Node("()")
             child1 = self.TypedVar()
             child1.parent = nodo
@@ -229,17 +269,16 @@ class Parser:
                 for i, c in enumerate(childrens):
                     c.parent = nodo
                     setattr(c, "order", i+1)
-
+            return nodo
+        
         #TypedVarList ::=  ''
-        if self.current_token not in FOLLOW['TypedVarList'] and self.current_token != "NEWLINE":
-            self.add_error(Error("TypedVarList", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['TypedVarList'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-            nodo =  self.errorNode()
-        return nodo
+        elif self.current_token in FOLLOW['TypedVarList']:
+            return None
+
+        self.quickError("TypedVarList","ID")
+        return self.errorNode()
 
     def TypedVarListTail(self):
-        nodo = None
         #TypedVarListTail ::=  , TypedVar TypedVarListTail
         if self.current_token == "COMMA":
             nodo = Node("TAIL")
@@ -249,60 +288,64 @@ class Parser:
             child2 = self.TypedVarListTail()
             if child2 != None:#Puede ser vacio
                 child2.parent = nodo
+            return nodo
 
         #TypedVarListTail ::=  ''
-        if self.current_token not in FOLLOW['TypedVarListTail'] and self.current_token != "NEWLINE":
-            self.add_error(Error("TypedVarListTail", "Token inesperado", self.current_token.row))
-            nodo = self.errorNode()
-            while self.current_token not in FOLLOW['TypedVarListTail'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW['TypedVarListTail']:
+            return None
+        
+        self.quickError("TypedVarListTail",",")
+        return self.errorNode()
     
     def Return(self):
-        nodo = None
-        addError = True
         #Return ::= -> Type
         if self.current_token == "ARROW":
             nodo = Node("->")
             self.getToken()
             child1 = self.Type()
             child1.parent = nodo
-            addError = False
+            return nodo
         
-        if self.current_token in FOLLOW['Return']:
-            addError = False
+        elif self.current_token in FOLLOW['Return']:
+            return None
 
-        if addError : nodo = self.errorNode()
-
-        #Return ::= epsilon
-        if self.current_token not in FOLLOW['Return'] and self.current_token != "NEWLINE":
-            self.add_error(Error("Return", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Return'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
-        return nodo
+        self.quickError("Return","->")
+        return self.errorNode()
 
     def Block(self):
         nodo = Node("DO")
         #Block ::= IDENT Statement StatementList DEDENT
-        addError = True
+
         if self.current_token == "IDENT":
             self.getToken()
-            child1 = self.Statement()
+            child1 = self.Statement() # Statement ya esta sincronizado
             child1.parent = nodo
             childs = self.StatementList()
             if childs != None:
                 for i,c in enumerate(childs.children):
                     c.parent = nodo##
-            if self.current_token == "DEDENT":
-                self.getToken()
-                addError = False
+            
+            if self.current_token != "DEDENT":
+                self.quickError("Block","DEDENT")
+                #Sincronizacion con dedent antes de newline
+                while self.current_token not in FOLLOW["Block"]:
+                    self.getToken()
+            else: self.getToken()
+
+        else:
+            self.quickError("Block", "IDENT")
 
         # Sincronizacion de errores
-        if self.current_token not in FOLLOW["Block"] and self.current_token != "NEWLINE" and addError:
-            self.add_error(Error("Block", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Block'] and self.current_token not in ["EOF","NEWLINE"]:
-                self.getToken()
+        if self.current_token not in FOLLOW["Block"]:
+            self.quickError("Block")
+
+        if self.current_error:#Agrega el error si aun no lo agrego
             nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
+            while self.current_token not in FOLLOW["Block"]:#
+                self.getToken()
+
         return nodo
 
     def StatementList(self): #M
@@ -317,12 +360,13 @@ class Parser:
                 for i,c in enumerate(childs.children):
                     c.parent = nodo##
 
-        #StatementList ::=  ''
-        if self.current_token not in FOLLOW['StatementList']:
+        #StatementList ::=  '' 
+        elif self.current_token in FOLLOW['StatementList']:
+            nodo = None
+        else:
+            self.quickError("StatementList")
             nodo = self.errorNode()
-            self.add_error(Error("StatementList", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['StatementList'] or self.current_token != "EOF":
-                self.getToken()
+            # sincroniza en Program y Block
         return nodo
 
     def Statement(self): #M
@@ -333,14 +377,18 @@ class Parser:
 
             #En ese se sincroniza avanzando hasta newline
             if self.current_token != "NEWLINE":
-                nodo = self.add_error()
-                self.add_error(Error("Statement","Token inesperado", self.current_token.row))
-                while self.current_token != "NEWLINE" and self.current_token != "EOF":
-                    self.getToken()
+                self.quickError("Statement","NEWLINE")
+
+            # Sincronizacion de errores con el NEWLINE
+            self.synchronize()
+            if self.current_error:
+                nodo = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None
 
             if self.current_token == "NEWLINE":
                 self.getToken()
-
+            
         #Statement ::=  if Expr : NEWLINE Block ElifList Else
         elif self.current_token == "IF":
             self.getToken()
@@ -348,29 +396,38 @@ class Parser:
             nodoif = Node("IF", parent=nodo)
             child1 = self.Expr()
             child1.parent = nodoif
-            if self.current_token == "COLON":
-                self.getToken()
-            else:
-                self.add_error(Error("Statement", "COLON not founded",self.current_token.row))
-                nodo = self.errorNode()
-            #Sincroniza hasta el newline
+
+            if self.current_token != "COLON":
+                self.quickError("Statement",":")
+            else: self.getToken()
+
             if self.current_token != "NEWLINE":
-                self.add_error(Error("Statement","Token inesperado", self.current_token.row))
+                self.quickError("Statement","NEWLINE")
+
+            # Sincronizacion de errores con el NEWLINE
+            self.synchronize()
+            if self.current_error:
                 nodo = self.errorNode()
-                while self.current_token != "NEWLINE" or self.current_token != "EOF":
-                    self.getToken()
+                self.error_list.append(self.current_error)
+                self.current_error = None
 
             if self.current_token == "NEWLINE":
                 self.getToken()
 
-            child2 = self.Block()
+            child2 = self.Block() #Block se sincroniza solito
             child2.parent = nodoif
-            child2 = self.ElifList()
-            if child2!=None:
-                for _,c in enumerate(child2.children):
-                    c.parent = nodo
-            child2 = self.Else()
-            if child2!=None: child2.parent= nodo
+
+            child2 = None
+            if self.current_token in FIRST["ElifList"]:
+                child2 = self.ElifList()
+                if child2!=None:
+                    for _,c in enumerate(child2.children):
+                        c.parent = nodo ##
+
+            child2 = None
+            if self.current_token in FIRST["Else"]:
+                child2 = self.Else()
+                if child2!=None: child2.parent = nodo
 
         #Statement ::=  while Expr : NEWLINE Block
         elif self.current_token == "WHILE":
@@ -378,77 +435,87 @@ class Parser:
             self.getToken()
             child = self.Expr()
             child.parent = nodo
-            if self.current_token =="COLON":
-                self.getToken()
-            else:
-                self.add_error(Error("Statement", "COLON not founded",self.current_token.row))
-                nodo = self.errorNode()
-            #Sincroniza hasta el newline
+           
+            if self.current_token != "COLON":
+                self.quickError("Statement",":")
+            else: self.getToken()
+
             if self.current_token != "NEWLINE":
+                self.quickError("Statement","NEWLINE")
+
+            # Sincronizacion de errores con el NEWLINE
+            self.synchronize()
+            if self.current_error:
                 nodo = self.errorNode()
-                self.add_error(Error("Statement","Token inesperado", self.current_token.row))
-                while self.current_token != "NEWLINE" or self.current_token != "EOF":
-                    self.getToken()
+                self.error_list.append(self.current_error)
+                self.current_error = None
 
             if self.current_token == "NEWLINE":
                 self.getToken()
 
-            child1 = self.Block()
+            child1 = self.Block() # Block se sincroniza solo
             child1.parent = nodo
             
         #Statement ::=  for ID in Expr : NEWLINE Block
         elif self.current_token == "FOR":
             nodo = Node("FOR")
             self.getToken()
-            if self.current_token == "ID":
-                grandson = Node(self.current_token.value)
-                self.getToken()
-                if self.current_token == "IN":
-                    child1 = Node("IN", parent=nodo)
-                    grandson.parent = child1
-                    self.getToken()
-                    child2 = self.Expr()
-                    child2.parent = child1
-                    if self.current_token == "COLON":
-                        self.getToken()
-                    else:
-                        nodo = self.errorNode()
-                        self.add_error(Error("Statement", "COLON not founded",self.current_token.row))
-                else:
-                    nodo = self.errorNode()
-                    self.add_error(Error("Statement", "IN not founded",self.current_token.row))
-            else:
-                nodo = self.errorNode()
-                self.add_error(Error("Statement", "<ID  > not founded",self.current_token.row))
+            child1 = self.errorNode()
+            grandson = self.errorNode()
 
-            #Sincroniza hasta el newline
+            if self.current_token != "ID":
+                self.quickError("Statement","ID")
+            else:
+                grandson = Node(self.current_token.value)
+                self.getToken()                
+
+            if self.current_token != "IN":
+                self.quickError("Statement","in")
+            else:
+                self.getToken()
+                child1 = Node("IN", parent=nodo)
+                
+            grandson.parent = child1
+            #self.getToken()#why
+            child2 = self.Expr()
+            child2.parent = child1
+                    
+            if self.current_token != "COLON":
+                self.quickError("Statement",":")
+            else: self.getToken()
+
             if self.current_token != "NEWLINE":
-                self.add_error(Error("Statement","Token inesperado", self.current_token.row))
+                self.quickError("Statement","NEWLINE")
+
+            # Sincronizacion de errores con el NEWLINE
+            self.synchronize()
+            if self.current_error:
                 nodo = self.errorNode()
-                while self.current_token != "NEWLINE" or self.current_token != "EOF":
-                    self.getToken()
+                self.error_list.append(self.current_error)
+                self.current_error = None
 
             if self.current_token == "NEWLINE":
                 self.getToken()
+
             child2 = self.Block()
             child2.parent = nodo
 
-        # Statment no puede ser vacio, asi que tambien evaluamos else
-        #       else
-        #           self.add_error(Error("Statement","Token inesperado", self.current_token.row))
-        else:
-            self.add_error(Error("Statement","No se encontro statement",self.current_token.row))##
+        else:#Se sincroniza para que no entre en bucle infinito, no puede ser vacio
+            #No deberia entrar aqui
+            self.quickError("Statement")#check si se puede sincronizar con newline xd
             nodo = self.errorNode()
-
-        if self.current_token not in FOLLOW['Statement']:
-            nodo = self.errorNode()
-            self.add_error(Error("Statement","Token inesperado",self.current_token.row))
-            while self.current_token not in FOLLOW['Statement'] and self.current_token != "EOF":
+            while self.current_token not in FOLLOW['Statement']:#Incluye dedent y eof
                 self.getToken()
+
+        #Si falto agregar algun error lo guarda
+        if self.current_error:
+            nodo = self.errorNode()
+            self.error_list.append(self.current_error)
+            self.current_error = None
+
         return nodo
 
-    def ElifList(self): #FALTA
-        nodo = None
+    def ElifList(self):
         #ElifList ::= Elif ElifList
         if self.current_token in FIRST['Elif']:
             nodo = Node("ELIFLIST")
@@ -458,74 +525,96 @@ class Parser:
             if childs != None:
                 for i,c in enumerate(childs.children):
                     c.parent = nodo##check
+            return nodo
 
         #ElifList ::= epsilon
-        if self.current_token not in FOLLOW['ElifList']:
-            nodo = self.errorNode()
-            self.add_error(Error("ElifList","Token inesperado",self.current_token.row))
-            while self.current_token not in FOLLOW['ElifList'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        if self.current_token in FOLLOW['ElifList']:
+            return None
+            
+        self.quickError("ElifList")
+        return self.errorNode()
 
-    def Elif(self): 
+
+    def Elif(self):
         nodo = None
-        addedError = True
         #Elif ::= elif Expr : NEWLINE Block
         if self.current_token == "ELIF":
             self.getToken()
             child1 = self.Expr()
-            if self.current_token == "COLON":
-                self.getToken()
-                if self.current_token == "NEWLINE":
-                    self.getToken()
-                    child2 = self.Block()
-                    nodo = Node("ELIF")
-                    child1.parent = nodo
-                    child2.parent = nodo
-                    addedError = False
-                else: self.add_error(Error("Elif", "NEWLINE not founded", self.current_token.row))
-            else: self.add_error(Error("Elif", "COLON not founded", self.current_token.row))
-        else: self.add_error(Error("Elif", "ELIF not founded", self.current_token.row))
 
-        if self.current_token not in FOLLOW['Elif']:
+            if self.current_token != "COLON":
+                self.quickError("Elif",":")
+            else: self.getToken()
+
+            if self.current_token != "NEWLINE":
+                self.quickError("Elif","NEWLINE")
+
+            # Sincronizacion de errores con el NEWLINE
+            self.synchronize()
+            if self.current_error:
+                nodo = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None
+
+            if self.current_token == "NEWLINE":
+                self.getToken()
+                child2 = self.Block()
+                nodo = Node("ELIF")
+                child1.parent = nodo
+                child2.parent = nodo
+    
+        elif self.current_token in FOLLOW['Elif']:
+            nodo = None
+        else: #Con la modificacion no deberia entrar aqui
+            #Cuando no esta vacio pero se intento poner la produccion, se sincroniza en Statement
+            self.quickError("Elif","elif")
             nodo = self.errorNode()
-            self.add_error(Error("Elif","Token inesperado",self.current_token.row))
-        while self.current_token not in FOLLOW['Elif'] and self.current_token != "EOF":
-            self.getToken()
+            
         return nodo
 
-    def Else(self):
+    def Else(self): #SYNCHRONIZE
         node = None
         #Else ::=  else : NEWLINE Block
-        addedError = True
         if self.current_token == "ELSE":
             self.getToken()
-            if self.current_token == "COLON":
+            if self.current_token != "COLON":
+                self.quickError("Else",":")
+            else: self.getToken()
+
+            if self.current_token != "NEWLINE":
+                self.quickError("Else","NEWLINE")
+                                
+            # Sincronizacion de errores con el NEWLINE
+            self.synchronize()
+            if self.current_error:
+                node = self.errorNode()
+                self.error_list.append(self.current_error)
+                self.current_error = None
+
+            if self.current_token == "NEWLINE":
                 self.getToken()
-                if self.current_token == "NEWLINE":
-                    self.getToken()
-                    node = Node("ELSE")
-                    child1 = self.Block()
-                    #Ya que no existe una condicion se puede asignar directamente a else
-                    for _,c in enumerate(child1.children):
-                        c.parent = node                 
-                    addedError = False
-                else: self.add_error(Error("Else", "NEWLINE not founded", self.current_token.row))
-            else: self.add_error(Error("Else", "COLON not founded", self.current_token.row))
-        else: self.add_error(Error("Else", "ELSE not founded", self.current_token.row))##
+                node = Node("ELSE")
+                child1 = self.Block()
+                #Ya que no existe una condicion se puede asignar directamente a else
+                for _,c in enumerate(child1.children):
+                    c.parent = node                 
+            #Ya agrego el error de no encontrar newline anteriormente
 
         #Else ::=  ''
-        if not addedError and self.current_token not in FOLLOW['Else']:
+        elif self.current_token in FOLLOW['Else']:
+            node = None
+
+        else: #Con la modificacion no deberia entrar aqui
+            #Cuando no esta vacio pero se intento poner la produccion, se sincroniza en Statement
+            self.quickError("Else","else")
             node = self.errorNode()
-            self.add_error(Error("Else","Token inesperado",self.current_token.row))
-        while self.current_token not in FOLLOW['Else'] and self.current_token != "EOF":
-            self.getToken()
+
         return node
     
-    def SimpleStatement(self): ##M
-        nodo = None
+    def SimpleStatement(self):
         #SimpleStatement ::=  Expr SSTail
         if self.current_token in FIRST['Expr']:
+            nodo = None
             child1 = self.Expr()
             child2 = self.SSTail()
             if child2!= None:
@@ -534,58 +623,51 @@ class Parser:
                 child2.parent = nodo
             else: 
                 nodo = child1
+            return nodo
 
         #SimpleStatement ::= pass
         elif self.current_token == "PASS":
-            nodo = Node("PASS")
             self.getToken()
+            return Node("pass")
 
         #SimpleStatement ::= return ReturnExpr
         elif self.current_token == "RETURN":
             self.getToken()
             nodo = Node("return")
             child1 = self.ReturnExpr()
-            child1.parent = nodo
-        else:
-            nodo = self.errorNode
-            self.add_error(Error("SimpleStatement","Token inesperado",self.current_token.row))
-
-        if self.current_token not in FOLLOW['SimpleStatement']:
-            nodo = self.errorNode
-            self.add_error(Error("SimpleStatement","Token inesperado",self.current_token.row))
-            while self.current_token not in FOLLOW['SimpleStatement'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
-## A partir de aqui Ruben
+            if child1 != None: ##CTSW
+                child1.parent = nodo
+            return nodo
+        
+        #Nunca deberia entrar aqui porque solo se llama si self.current_token in FIRST['SimpleStatement']
+        self.quickError("SimpleStatement","Expr | pass | return")
+        return self.errorNode()
 
     def SSTail(self): # COMPLETADO
-        nodo = None
         # SSTail ::=  = Expr
         if self.current_token == "ASSIGN":
             self.getToken()
-            nodo = self.Expr()
+            return self.Expr()
 
-        # SSTail ::=  Epsilon
-        if self.current_token not in FOLLOW["SSTail"]:
-            nodo = self.errorNode()
-            self.add_error(Error("SSTail", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['SSTail'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        # SSTail ::=  ''
+        if self.current_token in FOLLOW["SSTail"]:
+            return None
+        
+        self.quickError("SSTail","=")
+        return self.errorNode()
 
-    def ReturnExpr(self): # COMPLETADO
-        nodo = None
+
+    def ReturnExpr(self):
         # ReturnExpr ::= Expr
-        if self.current_token in FIRST['Expr']: #ID
-            nodo = self.Expr()
+        if self.current_token in FIRST['Expr']:
+            return self.Expr()
 
-        # ReturnExpr ::= Epsilon
-        if self.current_token not in FOLLOW["ReturnExpr"]:
-            nodo = self.errorNode()
-            self.add_error(Error("ReturnExpr", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['ReturnExpr'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        # ReturnExpr ::= ''
+        elif self.current_token in FOLLOW["ReturnExpr"]:
+            return None
+        
+        self.quickError("ReturnExpr","Expr")
+        return self.errorNode()
 
     def Expr(self):
         #Expr ::=  orExpr ExprPrime
@@ -597,10 +679,8 @@ class Parser:
             return prime.nodo
         return child1
 
-    def ExprPrime(self, head, tofill): # COMPLETADO
-        nodo = None
+    def ExprPrime(self, head, tofill):
         #ExprPrime ::=   if andExpr else andExpr ExprPrime
-        addedError = True
         if self.current_token == "IF":
             nodo = Node("IFEXPR")
             self.getToken()
@@ -616,17 +696,16 @@ class Parser:
                 child2 = self.ExprPrime(head, tofill)
                 if child2 != None:
                     addChildFront(nodo, child2)
-
-                addedError = False
-            else: self.add_error(Error("ExprPrime", "ELSE not founded", self.current_token.row))
-
+                return nodo
+            else:
+                self.quickError("ExprPrime","else")
+        
         #ExprPrime ::=  ''
-        if not addedError and self.current_token not in FOLLOW['ExprPrime']:
-            nodo = self.errorNode()
-            self.add_error(Error("ExprPrime","Token inesperado",self.current_token.row))
-        while self.current_token not in FOLLOW['ExprPrime'] and self.current_token != "EOF":
-            self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW['ExprPrime']:
+            return None
+
+        self.quickError("ExprPrime", "if")
+        return self.errorNode()
 
     def orExpr(self):
         # orExpr ::= andExpr orExprPrime
@@ -639,7 +718,6 @@ class Parser:
         return child1
 
     def orExprPrime(self, head, tofill):
-        nodo = None
         # orExprPrime ::= or andExpr orExprPrime
         if self.current_token == "OR":
             nodo = Node("OR")
@@ -652,14 +730,14 @@ class Parser:
             child2 = self.orExprPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
+            return nodo
 
         #orExprPrime ::= epsilon
-        if self.current_token not in FOLLOW["OrExprPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("OrExprPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['OrExprPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        if self.current_token in FOLLOW["OrExprPrime"]:
+            return None
+
+        self.quickError("OrExprPrime", "or")
+        return self.errorNode()
 
     def andExpr(self):
         #andExpr ::= notExpr andExprPrime
@@ -673,7 +751,6 @@ class Parser:
 
     def andExprPrime(self, head, tofill):
         #andExprPrime ::=   and notExpr andExprPrime
-        nodo = None
         if self.current_token == "AND":
             nodo = Node("AND")
             self.getToken()
@@ -685,14 +762,14 @@ class Parser:
             child2 = self.andExprPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
-
+            return nodo
+        
         #andExprPrime ::=  ''
-        if self.current_token not in FOLLOW["AndExprPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("AndExprPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['AndExprPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        if self.current_token in FOLLOW["AndExprPrime"]:
+            return None
+        
+        self.quickError("AndExprPrime", "and")
+        return self.errorNode()
     
     def notExpr(self):
         # notExpr ::= CompExpr notExprPrime
@@ -705,7 +782,6 @@ class Parser:
         return child1
 
     def notExprPrime(self, head, tofill):
-        nodo = None
         # notExprPrime ::= not CompExpr notExprPrime
         if self.current_token == "NOT":
             nodo = Node("NOT")
@@ -718,16 +794,16 @@ class Parser:
             child2 = self.notExprPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
+            return nodo
 
         #notExprPrime ::= epsilon
-        if self.current_token not in FOLLOW["NotExprPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("NotExprPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['NotExprPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW["NotExprPrime"]:
+            return None
+        
+        self.quickError("NotExprPrime","not")
+        return self.errorNode()
 
-    def CompExpr(self): # COMPLETADO
+    def CompExpr(self):
         #CompExpr ::=  IntExpr CompExprPrime
         prime, tofill = Place(), Place()
         child1 = self.IntExpr()
@@ -737,8 +813,7 @@ class Parser:
             return prime.nodo
         return child1
 
-    def CompExprPrime(self, head, tofill): #
-        nodo = None
+    def CompExprPrime(self, head, tofill):
         #CompExprPrime ::=   CompOp IntExpr CompExprPrime
         if self.current_token in FIRST['CompOp']:
             nodo = self.CompOp()
@@ -750,14 +825,14 @@ class Parser:
             child2 = self.CompExprPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
+            return nodo
 
         # CompExprPrime ::=  ''
-        if self.current_token not in FOLLOW["CompExprPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("CompExprPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['CompExprPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW["CompExprPrime"]:
+            return None
+        
+        self.quickError("CompExprPrime","Comp operator")
+        return self.errorNode()
 
     def IntExpr(self):
         # IntExpr ::= Term IntExprPrime
@@ -770,7 +845,6 @@ class Parser:
         return child1
 
     def IntExprPrime(self, head, tofill):
-        nodo = None
         # IntExprPrime ::= -|+ Term IntExprPrime
         if self.current_token in ["ADD", "SUB"]:
             nodo = Node(self.current_token.value)
@@ -783,27 +857,26 @@ class Parser:
             child2 = self.IntExprPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
+            return nodo
 
         #IntExprPrime ::= epsilon
-        if self.current_token not in FOLLOW["IntExprPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("IntExprPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['IntExprPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW["IntExprPrime"]:
+            return None
+        
+        self.quickError("IntExprPrime","+ | -")
+        return self.errorNode()
     
-    def Term(self): # COMPLETADO
+    def Term(self):
         #Term ::=  Factor TermPrime
         prime, tofill = Place(), Place()
         child1 = self.Factor()
-        self.TermPrime(prime, tofill)#Si esto sucede debe agregar el hijo al nivel mas bajo a la izquierda
+        self.TermPrime(prime, tofill)
         if not prime.empty:
             tofill.copyNodo(child1)
             return prime.nodo
         return child1
    
     def TermPrime(self, head, tofill):
-        nodo = None
         #TermPrime ::=   *|//|% Factor TermPrime
         if self.current_token in ["MUL", "DIV", "MOD"]:
             nodo = Node(self.current_token.value)
@@ -816,40 +889,35 @@ class Parser:
             child2 = self.TermPrime(head, tofill)
             if child2 != None:
                 addChildFront(nodo, child2)
+            return nodo
             
         #TermPrime ::=  ε
-        if self.current_token not in FOLLOW["TermPrime"]:
-            nodo = self.errorNode()
-            self.add_error(Error("TermPrime", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['TermPrime'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW["TermPrime"]:
+            return None
+        
+        self.quickError("TermPrime", "* | // | %")
+        return self.errorNode()
 
     def Factor(self):  # COMPLETADO
-        addError = True
-        nodo = None
         # Factor ::= - Factor
         if self.current_token == "SUB":
             nodo = Node("-")
             self.getToken()
             child = self.Factor()
             if child!=None: child.parent = nodo
-            addError = False
+            return nodo
 
         # Factor ::= Name
         elif self.current_token in FIRST['Name']:
-            nodo = self.Name()
-            addError = False
+            return self.Name()
 
         # Factor ::= Literal
         elif self.current_token in FIRST['Literal']:
-            nodo = self.Literal()
-            addError = False
+            return self.Literal()
 
         # Factor ::= List
         elif self.current_token in FIRST['List']:
-            nodo = self.List()
-            addError = False
+            return self.List()
 
         # Factor ::= ( Expr )
         elif self.current_token == "LPAREN":
@@ -857,36 +925,27 @@ class Parser:
             nodo = self.Expr()#
             if self.current_token == "RPAREN":
                 self.getToken()
-                addError = False
+                return nodo
+            else: self.quickError("Factor",")")
         
-        else:
-            nodo = self.errorNode()#
-
-        if addError or self.current_token not in FOLLOW["Factor"]:
-            self.add_error(Error("Factor", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Factor'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        self.quickError("Factor", "- | Name | Literal | List | (Expr)")
+        return self.errorNode()
     
     def Name(self): # COMPLETADO
-        nodo = None
         # Name ::= ID NameTail
         if self.current_token == "ID":
-            nodo = Node(self.current_token.value, parent=nodo)
+            nodo = Node(self.current_token.value)
             self.getToken()
             child2 = self.NameTail()
             if child2 != None:
                 child2.parent = nodo
-        else:
-            nodo = self.errorNode()
-            self.add_error(Error("Name", "ID not founded", self.current_token.row))
-            while self.current_token != "NEWLINE" and  self.current_token != "EOF":
-                self.getToken()
-        return nodo
+            return nodo
+        #Nunca deberia entrar aqui ya que cuando Name es llamado es cuando self.current_token = ID
+        self.quickError("Name","ID")
+        #No hace recuperacion de errores porque solo lo ignora si no esta
+        return self.errorNode()
     
-    def NameTail(self): # COMPLETADO
-        addError = True
-        nodo = None
+    def NameTail(self):
         #NameTail ::=  ( ExprList )
         if self.current_token == "LPAREN":
             self.getToken()
@@ -894,37 +953,33 @@ class Parser:
             nodo.name = "()"
             if self.current_token == "RPAREN":
                 self.getToken()
-                addError = False
+                return nodo
+            else: self.quickError("NameTail",")")
 
         #NameTail ::=  List
         elif self.current_token in FIRST['List']:
-            nodo = self.List()
-            addError = False
+            return self.List() #Lista ve por sus propios errores
 
         #NameTail ::=  ε # FOLLOWS
-        if addError and self.current_token not in FOLLOW["NameTail"]:
-            nodo = self.errorNode()
-            self.add_error(Error("NameTail", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['NameTail'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
+        elif self.current_token in FOLLOW["NameTail"]:
+            return None
+        
+        self.quickError("NameTail")
+        return self.errorNode()
 
-    def Literal(self): # COMPLETADO
-        nodo = None
+    def Literal(self):
         if self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]:
             nodo = Node(self.current_token.value)
             self.getToken()
-
-        if self.current_token not in FOLLOW["Literal"]:
-            self.add_error(Error("Literal", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['Literal'] and self.current_token != "EOF":
-                self.getToken()
-            nodo = self.errorNode()
-        return nodo
+            return nodo
+        #Nunca deberia entrar aqui porque solo se llama si self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]
+        self.quickError("Literal", "none | true | false | integer | string")
+        #No hace recuperacion de errores porque solo lo ignora si no esta
+        #while self.current_token not in FOLLOW['Literal'] and self.current_token != "EOF":
+        #    self.getToken()
+        return self.errorNode()
 
     def List(self):
-        nodo = None
-        addedError = True
         # List ::= [ ExprList ]
         if self.current_token == "LBRACKET":
             self.getToken()
@@ -932,18 +987,13 @@ class Parser:
             nodo.name = ("[]")
             if self.current_token == "RBRACKET":
                 self.getToken()
-                addedError = False
-            else:   self.add_error(Error("List", "LBRACKET not founded", self.current_token.row))
-        else:   self.add_error(Error("List", "RBRACKET not founded", self.current_token.row))
+                return nodo
+            else: self.quickError("List","]")
+        
+        self.quickError("List","[")
+        return self.errorNode()
 
-        if addedError:
-          nodo = self.errorNode()
-          while self.current_token != "NEWLINE" and self.current_token != "EOF":
-            self.getToken()
-        return nodo
-
-    def ExprList(self):  # COMPLETADO
-        nodo = None
+    def ExprList(self):
         # ExprList ::= Expr ExprListTail
         if self.current_token in FIRST['Expr']:
             nodo = Node("()")
@@ -957,18 +1007,16 @@ class Parser:
                 for i, c in enumerate(childrens):
                     c.parent = nodo
                     setattr(c, "order", i+1)
+            return nodo
 
         # ExprList ::=  ε
-        if self.current_token not in FOLLOW["ExprList"]:
-            nodo = self.errorNode()
-            self.add_error(Error("ExprList", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['ExprList'] and self.current_token != "EOF":
-                self.getToken()
+        elif self.current_token in FOLLOW["ExprList"]:
+            return None # No agrega error pero no retorna un nodo
         
-        return nodo
+        self.quickError("ExprList")
+        return self.errorNode()
 
-    def ExprListTail(self): #M
-        nodo = None
+    def ExprListTail(self):
         #ExprListTail ::=  , Expr ExprListTail
         if self.current_token == "COMMA":
             nodo = Node("TAIL")
@@ -978,31 +1026,22 @@ class Parser:
             child2 = self.ExprListTail()
             if child2 != None:
                 child2.parent = nodo
+            return nodo
 
         #ExprListTail ::=  ε # FOLLOWS
-        if self.current_token not in FOLLOW["ExprListTail"]:
-            nodo = self.errorNode()
-            self.add_error(Error("ExprListTail", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['ExprListTail'] and self.current_token != "EOF":
-                self.getToken()
-        return nodo
-
-    def CompOp(self): # COMPLETADO
+        elif self.current_token in FOLLOW["ExprListTail"]:
+            return None
+        
+        self.quickError("ExprListTail") #Significa que especifico un error al intentar colocar un ExprListTail
+        return self.errorNode()
+    
+    def CompOp(self):
         #CompOp ::=  == | != | < | > | <= | >= | is
         if self.current_token in ["EQ", "DIF", "LESS", "GRTR", "LESSEQ", "GRTREQ", "IS"]:
             nodo = Node(self.current_token.value)
             self.getToken()
             return nodo
-
-        if self.current_token not in FOLLOW["CompOp"]:
-            self.add_error(Error("CompOp", "Token inesperado", self.current_token.row))
-            while self.current_token not in FOLLOW['CompOp'] and self.current_token != "EOF":
-                self.getToken()
-            return self.errorNode()
-
-if not DEBUG:
-    escaner = Scanner()
-    escaner.begin("file.txt")
-    miparser = Parser(escaner)
-    #TOKEN_INPUT = ["PASS", "NEWLINE", "EOF"]
-    miparser.S()
+        #Nunca deberia entrar aqui porque solo se llama si self.current_token in FIRST['CompOp']
+        self.quickError("CompOp", "Comp operator")
+        #No hace recuperacion de errores porque solo lo ignora si no esta
+        return self.errorNode()

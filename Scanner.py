@@ -4,12 +4,6 @@ global foundedError
 from utils.ReservedWords import *
 from utils.Error import *
 
-"""
-# SCANNER
-- Maria Cruz
-- Ruben Guzman
-"""
-
 foundedToken = False
 foundedError = False
 
@@ -28,8 +22,8 @@ class Token:
         tam1 = len(self.type)
         espacio = ""
         while tam1 < 8:
-          espacio += " "
-          tam1 += 1
+            espacio += " "
+            tam1 += 1
         #return "%s [ %s ] at (%i:%i)" % (self.type,self.value,self.row, self.col-len(str(self.value))+1*(len(str(self.value))>0))
         return "%s%s [ %s ] at (%i:%i)" % (self.type,espacio,self.value,self.row, self.col)
 
@@ -56,6 +50,11 @@ class Scanner:
         # Aux
         self.firstOfDblOper = []
         self.getFirstOfDblOper()
+
+    def createError(self,errorType, errorDescription):
+        global foundedError
+        foundedError = True
+        return Error(errorType,errorDescription, self.pos[0])
 
     def begin(self, file):
         try:
@@ -118,15 +117,15 @@ class Scanner:
             self.lexeme += self.current_char
             c = self.peekchar()
         if len(self.lexeme) > 1 and self.lexeme[0] == "0":
-            return False, Error("Numero invalido","El numero no puede tener un 0 a la izquierda",self.pos[0])
+            return False, self.createError("Numero invalido", "El numero no puede tener un 0 a la izquierda")
         if len(self.lexeme) == 10:
             if int(self.lexeme[:9]) == 214748364:
                 if int(self.lexeme[9]) > 7:
-                    return False, Error("Numero invalido","EL numero es muy grande",self.pos[0])
+                    return False, self.createError("Numero invalido", "EL numero es muy grande")
             elif int(self.lexeme[:9]) > 214748364:
-                return False, Error("Numero invalido","EL numero es muy grande",self.pos[0])
+                return False, self.createError("Numero invalido", "EL numero es muy grande")
         elif len(self.lexeme) > 10:
-            return False, Error("Numero invalido","EL numero es muy grande",self.pos[0])
+            return False, self.createError("Numero invalido", "EL numero es muy grande")
         return True, Token("INTEGER", self.lexeme, self.pos[0], self.pos[1])
 
     def getTknOper(self):
@@ -204,7 +203,7 @@ class Scanner:
                         tabs += 1
                 elif espacios: # La identacion no esta completa y vino un tab
                     espacios = 0
-                    self.errores.append(Error("IDENT","Error de identacion", self.pos[0]))
+                    self.errores.append(self.createError("IDENT", "Error de identacion"))
                 else:
                     tabs += 1
 
@@ -213,7 +212,7 @@ class Scanner:
                 tabs += 1
 
             if espacios: # Quedaron espacios sueltos
-                self.errores.append(Error("IDENT","Error de identacion", self.pos[0]))
+                self.errores.append(self.createError("IDENT", "Error de identacion"))
             dif = tabs - self.ident               #     Bug de dedentación
 
             if tabs or dif != 0:                          #     Bug de dedentación
@@ -236,9 +235,11 @@ class Scanner:
 
         while foundedError:
             foundedError = False
-            self.current_char = None
             self.lexeme = ""
             token = None
+
+            if self.current_char!= "\n":
+                self.current_char = None
 
             if len(self.buffer) == 0: return self.getTknEOF()
 
@@ -283,28 +284,29 @@ class Scanner:
                 lex = ""
                 while self.current_char != '"':
                     if self.current_char == "\n":
-                      self.errores.append( Error("String error", "la string no se a cerrado", self.pos[0]) )
-                      break
+                        self.errores.append( self.createError("String error",  "la string no se a cerrado"))
+                        break
                     try:
-                      int_val = ord(self.current_char)
-                      if int_val > 180 or int_val < 32:
-                        self.errores.append( Error("String error", "\"" + self.current_char +  "\" fuera de rango", self.pos[0]) )
+                        int_val = ord(self.current_char)
+                        if int_val > 180 or int_val < 32:
+                            self.errores.append( self.createError("String error",  "\"" + self.current_char +  "\" fuera de rango"))
                     except Exception as e:
-                      print('Error:', e)
+                        print('Error:', e)
                     if self.current_char == "\\":
-                      self.getchar()
-                      if self.current_char != "\"":
-                        self.errores.append( Error("String error", "\"\\" + self.current_char + "\" not recognized", self.pos[0]) )
+                        self.getchar()
+                        if self.current_char != "\"":
+                            self.errores.append( self.createError("String error",  "\"\\" + self.current_char + "\" not recognized"))
 
                     lex += self.current_char
                     self.getchar()
-                return Token("STRING", lex, self.pos[0], self.pos[1])
+                token =  Token("STRING", lex, self.pos[0], self.pos[1])
 
             elif len(self.buffer) == 0:
                 return self.getTknEOF()
 
             elif self.current_char:
-                self.errores.append( Error("Symbol error", "el simbolo es invalido", self.pos[0]) )
+                self.errores.append( self.createError("Symbol error",  "el simbolo es invalido"))
+                foundedError = True
 
         return token
 

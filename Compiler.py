@@ -29,4 +29,4 @@ class Compiler:
             print("Error:  %s " % i)
 
 compiler = Compiler()
-compiler.begin("file.txt")
+compiler.begin("files/file.txt")
