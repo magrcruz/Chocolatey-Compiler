@@ -53,10 +53,6 @@ class Parser:
             else:
                 self.current_token = Token("EOF","EOF",0,0)
 
-    #def add_error(self, error):
-    #    error.col = self.current_token.col
-    #    error.descripcion += ", found %s" % self.current_token.value
-    #    self.error_list.append(error)
     def synchronize(self):
         while not(self.current_token == "NEWLINE" or self.current_token == "EOF"):
             self.getToken()
@@ -644,7 +640,7 @@ class Parser:
             return nodo
         
         #Nunca deberia entrar aqui porque solo se llama si self.current_token in FIRST['SimpleStatement']
-        self.quickError("SimpleStatement")
+        self.quickError("SimpleStatement","Expr | pass | return")
         return self.errorNode()
 
     def SSTail(self): # COMPLETADO
@@ -670,7 +666,7 @@ class Parser:
         elif self.current_token in FOLLOW["ReturnExpr"]:
             return None
         
-        self.quickError("ReturnExpr")
+        self.quickError("ReturnExpr","Expr")
         return self.errorNode()
 
     def Expr(self):
@@ -932,7 +928,7 @@ class Parser:
                 return nodo
             else: self.quickError("Factor",")")
         
-        self.quickError("Factor")
+        self.quickError("Factor", "- | Name | Literal | List | (Expr)")
         return self.errorNode()
     
     def Name(self): # COMPLETADO
@@ -977,7 +973,7 @@ class Parser:
             self.getToken()
             return nodo
         #Nunca deberia entrar aqui porque solo se llama si self.current_token in ["NONE", "TRUE", "FALSE", "INTEGER", "STRING"]
-        self.quickError("Literal")
+        self.quickError("Literal", "none | true | false | integer | string")
         #No hace recuperacion de errores porque solo lo ignora si no esta
         #while self.current_token not in FOLLOW['Literal'] and self.current_token != "EOF":
         #    self.getToken()
